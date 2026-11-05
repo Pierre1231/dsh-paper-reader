@@ -1,0 +1,279 @@
+export interface PdfParagraph {
+  key: string;
+  elements: HTMLElement[];
+  text: string;
+  /** One copied bounding rectangle per visual line. */
+  rects: DOMRect[];
+}
+
+/** A DOM-independent rectangle used by the geometry functions and their tests. */
+export interface PdfParagraphRect {
+  left: number;
+  top: number;
+  width: number;
+  height: number;
+}
+
+export interface PdfTextFragment {
+  text: string;
+  rect: PdfParagraphRect;
+  fontSize: number;
+  /** Present for fragments collected from a text layer, optional in pure geometry tests. */
+  element?: HTMLElement;
+}
+
+export interface PdfVisualLine {
+  text: string;
+  rect: PdfParagraphRect;
+  fontSize: number;
+  fragments: PdfTextFragment[];
+}
+
+const right = (rect: PdfParagraphRect) => rect.left + rect.width;
+const bottom = (rect: PdfParagraphRect) => rect.top + rect.height;
+
+function unionRects(rects: PdfParagraphRect[]): PdfParagraphRect {
+  const left = Math.min(...rects.map(rect => rect.left));
+  const top = Math.min(...rects.map(rect => rect.top));
+  const maxRight = Math.max(...rects.map(right));
+  const maxBottom = Math.max(...rects.map(bottom));
+  return { left, top, width: maxRight - left, height: maxBottom - top };
+}
+
+function horizontalOverlap(a: PdfParagraphRect, b: PdfParagraphRect): number {
+  return Math.max(0, Math.min(right(a), right(b)) - Math.max(a.left, b.left));
+}
+
+function verticalOverlap(a: PdfParagraphRect, b: PdfParagraphRect): number {
+  return Math.max(0, Math.min(bottom(a), bottom(b)) - Math.max(a.top, b.top));
+}
+
+function joinFragments(fragments: PdfTextFragment[]): string {
+  let text = "";
+  let previous: PdfTextFragment | undefined;
+  for (const fragment of fragments) {
+    if (previous) {
+      const gap = fragment.rect.left - right(previous.rect);
+      // PDF.js normally includes spaces in the text items. Add one only for
+      // visibly separated Latin words when the source omitted that space.
+      if (gap > Math.max(1, Math.min(previous.fontSize, fragment.fontSize) * 0.12) &&
+          /[A-Za-z0-9]$/.test(text) && /^[A-Za-z0-9]/.test(fragment.text)) text += " ";
+    }
+    text += fragment.text;
+    previous = fragment;
+  }
+  return text.trim();
+}
+
+/**
+ * Merge baseline-aligned fragments into visual lines. A large horizontal gap
+ * starts another line even at the same baseline, which separates page columns.
+ */
+export function buildPdfVisualLines(fragments: PdfTextFragment[]): PdfVisualLine[] {
+  const ordered = fragments
+    .filter(fragment => fragment.text.trim() && fragment.rect.width >= 0 && fragment.rect.height > 0 &&
+      Number.isFinite(fragment.rect.left) && Number.isFinite(fragment.rect.top) &&
+      Number.isFinite(fragment.rect.width) && Number.isFinite(fragment.rect.height))
+    .slice()
+    .sort((a, b) => bottom(a.rect) - bottom(b.rect) || a.rect.left - b.rect.left);
+
+  const bands: { fragments: PdfTextFragment[]; baseline: number; fontSize: number }[] = [];
+  for (const fragment of ordered) {
+    let best: (typeof bands)[number] | undefined;
+    let bestDistance = Infinity;
+    for (const band of bands) {
+      const distance = Math.abs(bottom(fragment.rect) - band.baseline);
+      const tolerance = Math.max(1.5, Math.min(fragment.fontSize, band.fontSize) * 0.35);
+      const overlap = verticalOverlap(fragment.rect, unionRects(band.fragments.map(item => item.rect)));
+      if (distance <= tolerance && overlap >= Math.min(fragment.rect.height, band.fragments[0].rect.height) * 0.25 && distance < bestDistance) {
+        best = band;
+        bestDistance = distance;
+      }
+    }
+    if (best) {
+      best.fragments.push(fragment);
+      const count = best.fragments.length;
+      best.baseline += (bottom(fragment.rect) - best.baseline) / count;
+      best.fontSize += (fragment.fontSize - best.fontSize) / count;
+    } else {
+      bands.push({ fragments: [fragment], baseline: bottom(fragment.rect), fontSize: fragment.fontSize });
+    }
+  }
+
+  const lines: PdfVisualLine[] = [];
+  for (const band of bands) {
+    const inReadingOrder = band.fragments.slice().sort((a, b) => a.rect.left - b.rect.left || a.rect.top - b.rect.top);
+    let current: PdfTextFragment[] = [];
+    let currentRight = 0;
+    const flush = () => {
+      if (!current.length) return;
+      const length = current.reduce((sum, fragment) => sum + Math.max(1, fragment.text.length), 0);
+      const fontSize = current.reduce((sum, fragment) => sum + fragment.fontSize * Math.max(1, fragment.text.length), 0) / length;
+      lines.push({ text: joinFragments(current), rect: unionRects(current.map(fragment => fragment.rect)), fontSize, fragments: current });
+      current = [];
+    };
+    for (const fragment of inReadingOrder) {
+      if (current.length) {
+        const previous = current[current.length - 1];
+        const gap = fragment.rect.left - currentRight;
+        const maxGap = Math.max(2, Math.max(previous.fontSize, fragment.fontSize) * 1.5);
+        if (gap > maxGap) flush();
+      }
+      current.push(fragment);
+      currentRight = Math.max(currentRight, right(fragment.rect));
+    }
+    flush();
+  }
+  return lines.filter(line => line.text).sort((a, b) => a.rect.top - b.rect.top || a.rect.left - b.rect.left);
+}
+
+function hasColumnOverlap(a: PdfVisualLine, b: PdfVisualLine): boolean {
+  const minimumWidth = Math.min(a.rect.width, b.rect.width);
+  return horizontalOverlap(a.rect, b.rect) >= Math.max(1, minimumWidth * 0.15);
+}
+
+function canContinueParagraph(previous: PdfVisualLine, current: PdfVisualLine): boolean {
+  const fontRatio = Math.min(previous.fontSize, current.fontSize) / Math.max(previous.fontSize, current.fontSize);
+  if (fontRatio < 0.75) return false;
+  const gap = current.rect.top - bottom(previous.rect);
+  // Academic PDFs often use block paragraphs with no first-line indent.
+  // SuperMimic body lines are ~2px apart at 9.96px font size, while paragraph
+  // boundaries are ~6.4px apart; a generous line-height threshold merges the
+  // whole section. Keep the threshold below that inter-paragraph gap.
+  return gap <= Math.max(2, Math.min(previous.fontSize, current.fontSize) * 0.45);
+}
+
+/**
+ * Group lines into linear paragraph chains. Each line chooses its nearest
+ * overlapping line above; incompatible or already-continued lines start a new
+ * paragraph. The one-successor rule stops a full-width line bridging columns.
+ */
+export function groupPdfVisualLines(input: PdfVisualLine[]): PdfVisualLine[][] {
+  const lines = input.slice().sort((a, b) => a.rect.top - b.rect.top || a.rect.left - b.rect.left);
+  const parents = lines.map(() => -1);
+  const children = lines.map(() => -1);
+
+  for (let index = 1; index < lines.length; index++) {
+    const current = lines[index];
+    let nearest = -1;
+    let nearestDistance = Infinity;
+    for (let candidate = 0; candidate < index; candidate++) {
+      const previous = lines[candidate];
+      const minimumHeight = Math.min(previous.rect.height, current.rect.height);
+      // Require a genuinely later baseline rather than another fragment on the
+      // same visual row whose rectangle happens to overlap vertically.
+      if (bottom(current.rect) - bottom(previous.rect) <= minimumHeight * 0.45) continue;
+      if (!hasColumnOverlap(previous, current)) continue;
+      const distance = Math.max(0, current.rect.top - bottom(previous.rect));
+      if (distance < nearestDistance) {
+        nearest = candidate;
+        nearestDistance = distance;
+      }
+    }
+    if (nearest >= 0 && children[nearest] < 0 && canContinueParagraph(lines[nearest], current)) {
+      parents[index] = nearest;
+      children[nearest] = index;
+    }
+  }
+
+  const paragraphs: PdfVisualLine[][] = [];
+  for (let index = 0; index < lines.length; index++) {
+    if (parents[index] >= 0) continue;
+    const paragraph: PdfVisualLine[] = [];
+    let cursor = index;
+    while (cursor >= 0) {
+      paragraph.push(lines[cursor]);
+      cursor = children[cursor];
+    }
+    paragraphs.push(paragraph);
+  }
+  return paragraphs;
+}
+
+interface PdfParagraphCache {
+  paragraphs: PdfParagraph[];
+  elements: HTMLElement[];
+  /** Client-space layer bounds used to translate cached line rects on scroll. */
+  layerRect: PdfParagraphRect;
+}
+
+const paragraphCache = new WeakMap<HTMLElement, PdfParagraphCache>();
+
+function readFontSize(element: HTMLElement, layer: HTMLElement): number {
+  const view = layer.ownerDocument.defaultView;
+  const value = view ? Number.parseFloat(view.getComputedStyle(element).fontSize) : Number.NaN;
+  const rectHeight = element.getBoundingClientRect().height;
+  return Number.isFinite(value) && value > 0 ? value : rectHeight > 0 ? rectHeight : 12;
+}
+
+function collectFragments(layer: HTMLElement): PdfTextFragment[] {
+  const fragments: PdfTextFragment[] = [];
+  for (const element of layer.querySelectorAll<HTMLElement>("span")) {
+    if (element.querySelector("span") || element.closest(".markedContent")) continue;
+    const text = element.textContent || "";
+    if (!text.trim()) continue;
+    const bounds = element.getBoundingClientRect();
+    if (!bounds.width || !bounds.height) continue;
+    fragments.push({
+      element,
+      text,
+      rect: { left: bounds.left, top: bounds.top, width: bounds.width, height: bounds.height },
+      fontSize: readFontSize(element, layer),
+    });
+  }
+  return fragments;
+}
+
+function buildParagraphs(layer: HTMLElement, pageNumber: number): PdfParagraph[] {
+  const groups = groupPdfVisualLines(buildPdfVisualLines(collectFragments(layer)));
+  return groups.map((lines, index) => ({
+    key: `pdf-${pageNumber}-paragraph-${index + 1}`,
+    elements: lines.flatMap(line => line.fragments.flatMap(fragment => fragment.element ? [fragment.element] : [])),
+    text: lines.map(line => line.text).join("\n"),
+    rects: lines.map(line => new DOMRect(line.rect.left, line.rect.top, line.rect.width, line.rect.height)),
+  }));
+}
+
+function clientRect(rect: { left: number; top: number; width: number; height: number }): PdfParagraphRect {
+  return { left: rect.left, top: rect.top, width: rect.width, height: rect.height };
+}
+
+/** Find the cached paragraph containing a text-layer element. */
+export function findPdfParagraph(target: Element, layer: HTMLElement, pageNumber: number): PdfParagraph | null {
+  if (!layer.contains(target)) return null;
+  let cache = paragraphCache.get(layer);
+  // PdfPage replaces all spans on zoom but retains the layer element itself.
+  // Checking only the WeakMap key would therefore return detached elements and
+  // coordinates from the previous zoom.
+  const intact = cache && cache.elements.length > 0 &&
+    layer.contains(cache.elements[0]) && layer.contains(cache.elements[cache.elements.length - 1]);
+  if (!cache || !intact) {
+    const paragraphs = buildParagraphs(layer, pageNumber);
+    cache = {
+      paragraphs,
+      elements: paragraphs.flatMap(paragraph => paragraph.elements),
+      layerRect: clientRect(layer.getBoundingClientRect()),
+    };
+    paragraphCache.set(layer, cache);
+  } else {
+    const bounds = layer.getBoundingClientRect();
+    if (bounds.width !== cache.layerRect.width || bounds.height !== cache.layerRect.height) {
+      // A same-DOM layout change (for example a CSS resize) needs fresh geometry.
+      const paragraphs = buildParagraphs(layer, pageNumber);
+      cache = { paragraphs, elements: paragraphs.flatMap(paragraph => paragraph.elements), layerRect: clientRect(bounds) };
+      paragraphCache.set(layer, cache);
+    } else {
+      // DOMRects are client coordinates, not document coordinates. Translate
+      // them when scrolling instead of leaving highlights at the old position.
+      const dx = bounds.left - cache.layerRect.left;
+      const dy = bounds.top - cache.layerRect.top;
+      if (dx || dy) {
+        for (const paragraph of cache.paragraphs) {
+          paragraph.rects = paragraph.rects.map(rect => new DOMRect(rect.left + dx, rect.top + dy, rect.width, rect.height));
+        }
+        cache.layerRect = clientRect(bounds);
+      }
+    }
+  }
+  return cache.paragraphs.find(paragraph => paragraph.elements.some(element => element === target || element.contains(target))) || null;
+}
