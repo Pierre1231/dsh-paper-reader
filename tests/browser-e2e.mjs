@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict'
 import { mkdir, writeFile } from 'node:fs/promises'
 import { chromium } from 'playwright-core'
+import { forgetReadingPositions, useActualSize } from './reader-helpers.mjs'
 
 const url = process.env.PAPER_TEST_URL
 const pdf = process.env.PAPER_TEST_PDF
@@ -9,9 +10,11 @@ const executablePath = process.env.CHROME_PATH || 'C:/Program Files/Google/Chrom
 const browser = await chromium.launch({ executablePath, headless: true })
 try {
   const page = await browser.newPage()
+  await forgetReadingPositions(page)
   const errors = []
   page.on('pageerror', error => errors.push(String(error)))
   await page.goto(url, { waitUntil: 'networkidle' })
+  await useActualSize(page)
   const title = page.locator('[data-pdf-page="1"] .pr-text-layer span').filter({ hasText: 'SuperMimic:' }).first()
   await title.waitFor({ timeout: 20000 })
   assert.equal(await page.locator('[data-pdf-page]').count(), 19)

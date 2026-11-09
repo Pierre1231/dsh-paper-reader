@@ -1,13 +1,16 @@
 import assert from 'node:assert/strict'
 import { chromium } from 'playwright-core'
+import { forgetReadingPositions, useActualSize } from './reader-helpers.mjs'
 const url = process.env.PAPER_TEST_URL
 if (!url) throw new Error('Set PAPER_TEST_URL')
 const browser = await chromium.launch({ executablePath: process.env.CHROME_PATH || 'C:/Program Files/Google/Chrome/Application/chrome.exe', headless: true })
 const errors = []
 const setup = async () => {
   const page = await browser.newPage({ viewport: { width: 1280, height: 960 } })
+  await forgetReadingPositions(page)
   page.on('pageerror', error => errors.push(String(error)))
   await page.goto(url, { waitUntil: 'networkidle' })
+  await useActualSize(page)
   await page.locator('[data-pdf-page="1"] .pr-text-layer span').first().waitFor({ timeout: 20000 })
   await page.locator('.pr-page-input input').fill('7')
   await page.locator('.pr-page-input input').press('Enter')

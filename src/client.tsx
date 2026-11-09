@@ -153,7 +153,15 @@ function ReaderShell({ data, fileName, sessionId, stateKey }: { data: Uint8Array
     if (pending || pendingSend) { showError('请先重试或放弃此前未完成的操作。'); return }
     const selection = { sessionId, fileName, page: quote.pageStart, pageEnd: quote.pageEnd, text: quote.text }
     const fullRequest = createDraftRequest(selection, action)
-    if (action === 'explain' || action === 'translate') { sendSelected({ request: fullRequest }); return }
+    if (action === 'explain' || action === 'translate') {
+      if (quote.image) {
+        // A formula: the typeset image travels with the text so the model reads the real notation.
+        const request: DraftRequest = { ...fullRequest, text: `${fullRequest.text}\n\n（附图为该选段在 PDF 中的原始排版，其中的公式请以图片为准。）` }
+        sendSelected({ request, image: { blob: quote.image, fileName: `${fileName.replace(/\.pdf$/i, '')}-第${quote.pageStart}页公式.png` } })
+        return
+      }
+      sendSelected({ request: fullRequest }); return
+    }
     const insertFallback = () => {
       if (!isCurrent()) return
       const fallback = retryDraftInsertion(fullRequest, bindings.get(sessionId))

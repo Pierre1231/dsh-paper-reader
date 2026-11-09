@@ -40,6 +40,31 @@ export function positionReaderOverlay(
   };
 }
 
+/**
+ * Place an overlay beside the anchor (right preferred, then left) inside a
+ * horizontal lane, e.g. the visible reading area including the page margin,
+ * so it never covers the text it acts on. Returns null when neither side has
+ * room; callers then fall back to positionReaderOverlay.
+ */
+export function positionMarginOverlay(
+  anchor: OverlayRect,
+  lane: { left: number; right: number },
+  boundary: OverlayRect,
+  size: { width: number; height: number },
+  gap = 10,
+): { left: number; top: number; placement: 'right' | 'left' } | null {
+  const width = Math.max(0, size.width);
+  const height = Math.max(0, size.height);
+  let left: number;
+  let placement: 'right' | 'left';
+  if (lane.right - right(anchor) - gap >= width) { left = right(anchor) + gap; placement = 'right'; }
+  else if (anchor.left - lane.left - gap >= width) { left = anchor.left - gap - width; placement = 'left'; }
+  else return null;
+  // Align with the paragraph's first line, kept inside the visible area.
+  const top = clampAxis(anchor.top, boundary.top, Math.max(0, boundary.height), height, 8);
+  return { left, top, placement };
+}
+
 function contains(point: Point, rect: OverlayRect): boolean {
   return point.x >= rect.left && point.x <= right(rect) &&
     point.y >= rect.top && point.y <= bottom(rect);

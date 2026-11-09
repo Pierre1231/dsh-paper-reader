@@ -8,6 +8,7 @@ import http from 'node:http'
 import { readFile } from 'node:fs/promises'
 import { build } from 'esbuild'
 import { chromium } from 'playwright-core'
+import { forgetReadingPositions, useActualSize } from './reader-helpers.mjs'
 
 const pdfPath = process.env.PAPER_FORMULA_PDF
 if (!pdfPath) throw new Error('Set PAPER_FORMULA_PDF to arXiv 1706.03762')
@@ -30,10 +31,12 @@ try {
   for (const path of clients) {
     client = await readFile(path)
     const page = await browser.newPage({ viewport: { width: 1280, height: 900 }, deviceScaleFactor: 1.5 })
+    await forgetReadingPositions(page)
     const errors = []
     page.on('pageerror', error => errors.push(String(error)))
     await page.goto(`http://127.0.0.1:${server.address().port}/`)
     await page.locator('[data-pdf-page="1"][data-render-status="ready"]').waitFor({ timeout: 30000 })
+    if (await page.locator('.pr-zoom').count()) await useActualSize(page)
     await page.evaluate(() => { const scroll = document.querySelector('.pr-scroll'); scroll.scrollTop = document.querySelector('[data-pdf-page="4"]').offsetTop - 16 })
     await page.locator('[data-pdf-page="4"][data-render-status="ready"]').waitFor({ timeout: 30000 })
     // Bring equation (1) to the middle of the reader.

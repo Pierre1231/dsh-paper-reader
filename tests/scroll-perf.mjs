@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict'
 import { mkdir, writeFile } from 'node:fs/promises'
 import { chromium } from 'playwright-core'
+import { forgetReadingPositions, useActualSize } from './reader-helpers.mjs'
 const url = process.env.PAPER_TEST_URL
 if (!url) throw new Error('Set PAPER_TEST_URL')
 const label = process.env.PERF_LABEL || 'current'
@@ -12,6 +13,7 @@ const errors = []
 try {
   const context = await browser.newContext({ viewport: { width: 1280, height: 900 }, deviceScaleFactor: 2 })
   const page = await context.newPage()
+  await forgetReadingPositions(page)
   page.on('pageerror', error => errors.push(String(error)))
   await page.addInitScript(() => {
     const data = window.pdfPerf = { pageRects: 0, spanRects: 0, pixelReads: 0, pixelReadMs: 0, pngEncodes: 0, commits: [], longTasks: [], frames: [] }
@@ -38,6 +40,7 @@ try {
   })
   await page.goto(url + (baseline ? '?baseline=1' : ''), { waitUntil: 'networkidle' })
   await page.addStyleTag({ content: '#draft{display:none}#app{float:none;width:640px;height:100%}' })
+  await useActualSize(page)
   await page.locator('[data-pdf-page="1"][data-render-status="ready"]').waitFor({ timeout: 20000 })
   // Reproduce the common "clicked/read a passage, then kept scrolling" case.
   const title = page.locator('[data-pdf-page="1"] .pr-text-layer span').filter({ hasText: 'SuperMimic:' }).first()

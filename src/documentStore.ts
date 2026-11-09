@@ -12,10 +12,13 @@ import type { PDFDocumentProxy } from 'pdfjs-dist';
 import type { TextContent } from 'pdfjs-dist/types/src/display/api';
 import bundledAssets from 'pdf-bundled-assets';
 import { acquirePdfWorker, type PdfWorkerResult } from './pdfWorker';
+import { linksFromAnnotations, type PdfLink } from './links';
+import { buildPageSearchIndex, type PageSearchIndex } from './search';
 import { traceOpen, traceWorker } from './trace';
 
 
 export interface PdfRect { left: number; top: number; width: number; height: number }
+export interface PdfOutlineItem { title: string; dest: unknown; depth: number }
 export interface PdfImageRects { width: number; height: number; rects: PdfRect[] }
 
 export interface PdfHandle {
@@ -34,6 +37,12 @@ export interface PdfHandle {
   imageRectsNow(page: number): PdfImageRects | undefined;
   /** Release a far-away page's operator list and decoded resources. */
   cleanupPage(page: number): void;
+  /** Link annotations of a page, in page percentages. */
+  links(page: number): Promise<PdfLink[]>;
+  /** The document outline (bookmarks), flattened with depth; [] when absent. */
+  outline(): Promise<PdfOutlineItem[]>;
+  /** Search index of a page, built from its (cached) text content. */
+  searchIndex(page: number): Promise<PageSearchIndex>;
 }
 
 const IDLE_TTL_MS = 60000;
@@ -139,6 +148,9 @@ export function openPdfDocument(bytes: Uint8Array, key: string, workerUrl: strin
       const texts = new Map<number, Promise<TextContent>>();
       const images = new Map<number, Promise<PdfImageRects>>();
       const imagesReady = new Map<number, PdfImageRects>();
+      const linkCache = new Map<number, Promise<PdfLink[]>>();
+      const searchCache = new Map<number, Promise<PageSearchIndex>>();
+      let outlineCache: Promise<PdfOutlineItem[]> | undefined;
       const handle: PdfHandle = {
         id, key, pdf, numPages: pdf.numPages,
         firstPageSize: { width: viewport.width, height: viewport.height },
@@ -169,6 +181,42 @@ export function openPdfDocument(bytes: Uint8Array, key: string, workerUrl: strin
         cleanupPage(pageNumber) {
           // Do not wait: cleanup is skipped by pdf.js while a render is pending.
           void pdf.getPage(pageNumber).then(page => page.cleanup()).catch(() => {});
+        },
+        links(pageNumber) {
+          let pending = linkCache.get(pageNumber);
+          if (!pending) {
+            pending = pdf.getPage(pageNumber).then(async page => linksFromAnnotations(await page.getAnnotations({ intent: 'display' }), page.getViewport({ scale: 1 })));
+            linkCache.set(pageNumber, pending);
+            pending.catch(() => linkCache.delete(pageNumber));
+          }
+          return pending;
+        },
+        outline() {
+          outlineCache ??= pdf.getOutline().then(items => {
+            const flat: PdfOutlineItem[] = [];
+            const walk = (list: Array<{ title: string; dest: unknown; items: unknown[] }> | null, depth: number) => {
+              for (const item of list || []) {
+                if (flat.length >= 400) return;
+                flat.push({ title: String(item.title || '').trim() || '（无标题）', dest: item.dest, depth });
+                walk(item.items as typeof list, depth + 1);
+              }
+            };
+            walk(items as never, 0);
+            return flat;
+          }, () => []);
+          return outlineCache;
+        },
+        searchIndex(pageNumber) {
+          let pending = searchCache.get(pageNumber);
+          if (!pending) {
+            pending = Promise.all([handle.textContent(pageNumber), pdf.getPage(pageNumber)]).then(([{ content }, page]) => {
+              const viewport = page.getViewport({ scale: 1 });
+              return buildPageSearchIndex(pageNumber, content, viewport.transform, viewport.width, viewport.height);
+            });
+            searchCache.set(pageNumber, pending);
+            pending.catch(() => searchCache.delete(pageNumber));
+          }
+          return pending;
         },
       };
       traceOpen({ key, bytes: bytes.length, reused: false, ms: Math.round(performance.now() - started), pages: pdf.numPages, worker: worker.mode });

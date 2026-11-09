@@ -222,7 +222,7 @@ export function buildTraceReport() {
   const sum = (values: Array<number | undefined>) => round(values.reduce<number>((total, value) => total + (value || 0), 0));
   return {
     plugin: 'dsh-paper-reader',
-    version: '0.6.1',
+    version: '0.7.0',
     generatedAt: new Date().toISOString(),
     uptimeMs: Date.now() - state.loadedAt,
     environment: {

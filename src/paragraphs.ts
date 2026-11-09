@@ -4,6 +4,8 @@ export interface PdfParagraph {
   text: string;
   /** One copied bounding rectangle per visual line. */
   rects: DOMRect[];
+  /** Contains a display formula (attached scripts or fraction parts). */
+  math?: boolean;
 }
 
 /** A DOM-independent rectangle used by the geometry functions and their tests. */
@@ -27,6 +29,8 @@ export interface PdfVisualLine {
   rect: PdfParagraphRect;
   fontSize: number;
   fragments: PdfTextFragment[];
+  /** Set when sub/superscripts or fraction parts were attached (a formula). */
+  math?: boolean;
 }
 
 const right = (rect: PdfParagraphRect) => rect.left + rect.width;
@@ -199,7 +203,7 @@ export function attachPdfScripts(input: PdfVisualLine[]): PdfVisualLine[] {
     if (cluster.length === 1) { merged.push(cluster[0]); continue; }
     const base = cluster.reduce((best, line) => weight(line) > weight(best) ? line : best);
     const fragments = cluster.flatMap(line => line.fragments).sort(readingOrder);
-    merged.push({ text: joinFragments(fragments), rect: unionRects(cluster.map(line => line.rect)), fontSize: base.fontSize, fragments });
+    merged.push({ text: joinFragments(fragments), rect: unionRects(cluster.map(line => line.rect)), fontSize: base.fontSize, fragments, math: true });
   }
   return merged.sort((a, b) => a.rect.top - b.rect.top || a.rect.left - b.rect.left);
 }
@@ -308,6 +312,7 @@ function buildParagraphs(layer: HTMLElement, pageNumber: number): PdfParagraph[]
     elements: lines.flatMap(line => line.fragments.flatMap(fragment => fragment.element ? [fragment.element] : [])),
     text: lines.map(line => line.text).join("\n"),
     rects: lines.map(line => new DOMRect(line.rect.left, line.rect.top, line.rect.width, line.rect.height)),
+    math: lines.some(line => line.math),
   }));
 }
 

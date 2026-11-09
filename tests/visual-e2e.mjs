@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict'
 import { mkdir, writeFile } from 'node:fs/promises'
 import { chromium } from 'playwright-core'
+import { forgetReadingPositions, useActualSize } from './reader-helpers.mjs'
 
 const url = process.env.PAPER_TEST_URL
 if (!url) throw new Error('Set PAPER_TEST_URL')
@@ -8,6 +9,7 @@ const output = 'test-results/visual'
 await mkdir(output, { recursive: true })
 const browser = await chromium.launch({ executablePath: process.env.CHROME_PATH || 'C:/Program Files/Google/Chrome/Application/chrome.exe', headless: true })
 const context = await browser.newContext({ viewport: { width: 1280, height: 960 } })
+await forgetReadingPositions(context)
 await context.tracing.start({ screenshots: true, snapshots: true, sources: false })
 const errors = []
 const report = { layout: [], checks: [], boundary: [], screenshots: [] }
@@ -15,6 +17,7 @@ const prepare = async (page, baseline = false) => {
   page.on('pageerror', error => errors.push(String(error)))
   await page.goto(url + (baseline ? '?baseline=1' : ''), { waitUntil: 'networkidle' })
   await page.addStyleTag({ content: '#draft{display:none}#app{float:none;width:900px;height:100%;font-family:"Segoe UI","Microsoft YaHei",sans-serif}html,body{background:#f4f5f7}' })
+  await useActualSize(page)
   await page.locator('[data-pdf-page="1"] .pr-text-layer span').filter({ hasText: 'SuperMimic:' }).first().waitFor({ timeout: 20000 })
 }
 const go = async (page, number) => {
@@ -107,6 +110,8 @@ try {
   report.checks.push('focus persistence, arrow navigation, Escape return')
 
   await page.evaluate(() => { document.querySelector('#app').style.width = '320px'; document.querySelector('.pr-scroll').scrollLeft = 90 })
+  // Panel resizes close open menus by design; let that notification pass before selecting.
+  await page.evaluate(() => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve))))
   await line.evaluate(node => {
     const range = document.createRange(); range.setStart(node.firstChild, 0); range.setEnd(node.firstChild, 4)
     const selection = getSelection(); selection.removeAllRanges(); selection.addRange(range)
