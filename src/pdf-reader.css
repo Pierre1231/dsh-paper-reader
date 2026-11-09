@@ -1,0 +1,272 @@
+/* Host tokens always win; the fallback palette also supports standalone use. */
+.pr-shell, .pr-local, .pr-open-local {
+  --pr-fallback-surface: #fff;
+  --pr-fallback-surround: #F4F5F7;
+  --pr-fallback-menu: #fff;
+  --pr-fallback-ink: #1F2937;
+  --pr-fallback-muted: #667085;
+  --pr-fallback-border: #D7DCE3;
+  --pr-fallback-accent: #2563EB;
+  --pr-surface: var(--dsw-alias-bg-base, var(--pr-fallback-surface));
+  --pr-surround: var(--dsw-alias-bg-module-platform, var(--pr-fallback-surround));
+  --pr-ink: var(--dsw-alias-label-primary, var(--pr-fallback-ink));
+  --pr-muted: var(--dsw-alias-label-secondary, var(--pr-fallback-muted));
+  --pr-border: var(--dsw-alias-border-l2, var(--pr-fallback-border));
+  --pr-accent: var(--dsw-alias-state-business-primary, var(--pr-fallback-accent));
+  /* The PDF paper stays white in either UI theme; marks need a stable contrast. */
+  --pr-pdf-mark: #2563EB;
+  /* Menu must be fully opaque for readability over PDF content */
+  --pr-menu: var(--pr-fallback-menu);
+  --pr-font: var(--dsw-font-family, system-ui, -apple-system, "Segoe UI", sans-serif);
+  --pr-hover: color-mix(in srgb, var(--pr-ink) 6%, transparent);
+  --pr-pressed: color-mix(in srgb, var(--pr-ink) 10%, transparent);
+  --pr-fallback-error: #B42318;
+  --pr-error: var(--dsw-alias-state-error-primary, var(--pr-fallback-error));
+  color: var(--pr-ink);
+  font-family: var(--pr-font);
+}
+@media (prefers-color-scheme: dark) {
+  .pr-shell, .pr-local, .pr-open-local {
+    --pr-fallback-surface: #1F2937;
+    --pr-fallback-surround: #161B22;
+    --pr-fallback-menu: #1F2937;
+    --pr-fallback-ink: #E6EDF3;
+    --pr-fallback-muted: #A7B1C2;
+    --pr-fallback-border: #465166;
+    --pr-fallback-accent: #8AB4FF;
+    --pr-fallback-error: #FDA29B;
+  }
+}
+.pr-shell, .pr-local { position: relative; display: flex; flex-direction: column; flex: 1 1 auto; width: 100%; height: 100%; min-height: 0; min-width: 0; overflow: hidden; container-type: inline-size; background: var(--pr-surface); }
+.pr-shell *, .pr-shell *::before, .pr-shell *::after, .pr-local *, .pr-local *::before, .pr-local *::after, .pr-open-local * { box-sizing: border-box; }
+.pr-icon { display: block; flex: none; vertical-align: middle; }
+.pr-local-toolbar { display: flex; flex: none; flex-wrap: wrap; align-items: center; gap: 8px 12px; padding: 8px 12px; border-bottom: 1px solid var(--pr-border); font-size: 12px; line-height: 18px; color: var(--pr-muted); }
+.pr-local-toolbar > span { flex: 1 1 180px; min-width: 0; }
+.pr-file-button { position: relative; display: inline-flex; flex: none; align-items: center; gap: 6px; overflow: hidden; min-height: 32px; padding: 5px 9px; border: 1px solid var(--pr-border); border-radius: 6px; color: var(--pr-ink); background: var(--pr-surface); font-size: 13px; line-height: 20px; cursor: pointer; }
+.pr-file-button:focus-within { outline: 2px solid var(--pr-accent); outline-offset: 2px; }
+.pr-file-button input { position: absolute; inset: 0; width: 100%; opacity: 0; cursor: pointer; }
+.pr-empty { padding: 24px; color: var(--pr-muted); font-size: 14px; line-height: 20px; overflow-wrap: anywhere; }
+.pr-empty[role="alert"] { color: var(--pr-error); }
+.pr-shell button, .pr-local button, .pr-open-local button {
+  display: inline-flex; flex: none; align-items: center; justify-content: center; gap: 6px; min-height: 32px; padding: 5px 8px;
+  border: 0; border-radius: 6px; color: var(--pr-ink); background: transparent; font: inherit; cursor: pointer;
+  transition: background-color 100ms ease, color 100ms ease, transform 100ms cubic-bezier(.23, 1, .32, 1);
+}
+.pr-shell button:disabled, .pr-local button:disabled { opacity: .35; cursor: default; }
+.pr-shell :focus-visible, .pr-local :focus-visible, .pr-open-local :focus-visible { outline: 2px solid var(--pr-accent); outline-offset: 2px; }
+@media (hover: hover) and (pointer: fine) {
+  .pr-shell button:hover:not(:disabled), .pr-local button:hover:not(:disabled), .pr-open-local button:hover:not(:disabled), .pr-file-button:hover { background-color: var(--pr-hover); }
+}
+/* Only pointer presses scale. Keyboard interaction remains immediate. */
+[data-input-method="pointer"] :is(.pr-shell, .pr-local, .pr-open-local) button:active:not(:disabled),
+:is(.pr-shell, .pr-local, .pr-open-local) [data-input-method="pointer"] button:active:not(:disabled),
+:is(.pr-shell, .pr-local, .pr-open-local)[data-input-method="pointer"] button:active:not(:disabled),
+[data-input-method="pointer"] .pr-file-button:active { transform: scale(0.97); background-color: var(--pr-pressed); }
+[data-input-method="keyboard"] button { transform: none; transition: none; }
+.pr-notice { position: absolute; right: 12px; bottom: 12px; left: 12px; z-index: 1100; display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; padding: 8px; border: 1px solid var(--pr-border); border-radius: 8px; background: var(--pr-menu); color: var(--pr-ink); box-shadow: 0 4px 16px rgb(0 0 0 / 12%); font-size: 12px; line-height: 18px; opacity: 1; transform: translateY(0); transition: opacity 150ms cubic-bezier(.23, 1, .32, 1), transform 150ms cubic-bezier(.23, 1, .32, 1); }
+.pr-notice > span { flex: 1 1 160px; min-width: 0; overflow-wrap: anywhere; }
+.pr-notice button { font-size: 12px; line-height: 18px; }
+.pr-notice .pr-notice-close { width: 32px; padding: 0; }
+.pr-reader { display: flex; flex-direction: column; min-width: 0; min-height: 0; width: 100%; height: 100%; overflow: hidden; color: var(--pr-ink); background: var(--pr-surround); font-family: var(--pr-font); }
+.pr-toolbar { position: relative; z-index: 2; display: flex; flex: none; align-items: center; gap: 12px; min-width: 0; min-height: 49px; padding: 8px 12px; border-bottom: 1px solid var(--pr-border); background: var(--pr-surface); }
+.pr-title-row { display: flex; flex: 1 1 0; align-items: center; gap: 8px; min-width: 0; }
+.pr-title-row > .pr-icon { color: var(--pr-muted); }
+.pr-filename { flex: 1 1 80px; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 13px; line-height: 20px; font-weight: 500; }
+.pr-toolbar-status, .pr-capture-status { display: inline-flex; align-items: center; gap: 4px; flex: 0 1 180px; min-width: 0; max-width: 40%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--pr-muted); font-size: 12px; line-height: 18px; opacity: 1; transition: opacity 100ms ease; }
+.pr-toolbar-status > span { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+.pr-toolbar-status[data-kind="progress"] { transition: none; }
+.pr-controls { display: flex; flex: none; align-items: center; gap: 8px; min-width: 0; font-variant-numeric: tabular-nums; }
+.pr-control-group { display: flex; flex: none; align-items: center; gap: 2px; }
+.pr-controls button, .pr-open-local > button { width: 32px; height: 32px; min-height: 32px; padding: 0; }
+.pr-notes-entry { display: inline-flex; flex: none; align-items: center; gap: 4px; height: 32px; min-height: 32px; padding: 0 8px; font-size: 12px; line-height: 18px; }
+.pr-notes-entry-label { font-weight: 500; }
+.pr-spinner { display: inline-block; flex: none; width: 12px; height: 12px; border: 1.5px solid currentColor; border-right-color: transparent; border-radius: 50%; animation: pr-spin 800ms linear infinite; }
+@keyframes pr-spin { to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) { .pr-spinner { animation: none; } }
+.pr-page-input { display: flex; flex: none; align-items: center; }
+.pr-page-input input { width: 42px; height: 32px; padding: 4px 2px; border: 1px solid var(--pr-border); border-radius: 6px; color: var(--pr-ink); background: var(--pr-surface); font: inherit; font-size: 12px; line-height: 18px; text-align: center; appearance: textfield; }
+.pr-page-input input::-webkit-inner-spin-button, .pr-page-input input::-webkit-outer-spin-button { appearance: none; margin: 0; }
+.pr-page-count, .pr-zoom { color: var(--pr-muted); font-size: 12px; line-height: 18px; white-space: nowrap; font-variant-numeric: tabular-nums; }
+.pr-page-count { padding-inline: 2px; }
+.pr-zoom { min-width: 38px; text-align: center; }
+.pr-divider { width: 1px; height: 20px; margin: 0 2px; background: var(--pr-border); }
+.pr-scroll { position: relative; flex: 1 1 auto; min-width: 0; min-height: 0; overflow: auto; overscroll-behavior: contain; }
+.pr-pages { display: flex; flex-direction: column; align-items: center; gap: 18px; width: max-content; min-width: 100%; padding: 20px 24px 40px; }
+/* The document keeps its original colors in both themes. */
+.pr-page { position: relative; flex: none; overflow: hidden; background: white; box-shadow: 0 2px 12px rgb(0 0 0 / 14%); }
+.pr-page canvas { display: block; width: 100%; height: 100%; }
+.pr-page-status { position: absolute; top: 16px; left: 16px; padding: 2px 4px; border-radius: 4px; color: var(--pr-muted); background: var(--pr-surface); font-size: 13px; line-height: 20px; }
+.pr-page-error { color: var(--pr-error); }
+.pr-no-text { position: absolute; right: 8px; bottom: 8px; padding: 4px 7px; border-radius: 4px; color: var(--pr-muted); background: var(--pr-surface); font-size: 11px; line-height: 16px; pointer-events: none; }
+.pr-message { padding: 36px 24px; color: var(--pr-muted); text-align: center; font-size: 14px; line-height: 20px; }
+.pr-message[role="alert"] { color: var(--pr-error); }
+/* PDF.js positions text using these variables and inline transforms. */
+.pr-text-layer { position: absolute; inset: 0; z-index: 1; overflow: clip; opacity: 1; line-height: 1; text-align: initial; text-size-adjust: none; forced-color-adjust: none; transform-origin: 0 0; }
+.pr-text-layer :is(span, br) { position: absolute; color: transparent; white-space: pre; cursor: text; transform-origin: 0 0; }
+.pr-text-layer span.markedContent { top: 0; height: 0; }
+/* Spans are inserted in groups; the group itself must not create a box. */
+.pr-text-chunk { display: contents; }
+.pr-text-layer > :not(.markedContent), .pr-text-layer .markedContent span:not(.markedContent) { z-index: 1; }
+.pr-text-layer span[role="img"] { user-select: none; cursor: default; }
+.pr-text-layer ::selection { color: transparent; background: color-mix(in srgb, var(--pr-accent) 18%, transparent); }
+.pr-text-layer br::selection { background: transparent; }
+.pr-paragraph-outline { position: fixed; z-index: 900; pointer-events: none; border: 1px solid var(--pr-pdf-mark); border-radius: 4px; background: color-mix(in srgb, var(--pr-pdf-mark) 16%, transparent); }
+.pr-figure-highlight { position: fixed; z-index: 900; pointer-events: none; border: 0; border-radius: 4px; background: transparent; box-shadow: inset 0 0 0 2px var(--pr-accent); }
+.pr-selection-menu { position: fixed; z-index: 1000; display: flex; width: max-content; flex-wrap: wrap; gap: 2px; max-width: calc(100vw - 16px); padding: 4px; border: 1px solid var(--pr-border); border-radius: 8px; color: var(--pr-ink); background: var(--pr-menu); background-color: var(--pr-menu); box-shadow: 0 8px 24px rgb(0 0 0 / 16%), 0 2px 6px rgb(0 0 0 / 12%); animation: menu-enter 150ms cubic-bezier(0.23, 1, 0.32, 1); transform-origin: top center; }
+.pr-selection-menu[data-closing] { animation: menu-exit 100ms cubic-bezier(0.23, 1, 0.32, 1) forwards; }
+.pr-selection-menu button { gap: 6px; min-height: 32px; padding: 6px 10px; color: inherit; font-size: 14px; line-height: 20px; white-space: nowrap; }
+
+/* Menu animations */
+@keyframes menu-enter {
+  from {
+    opacity: 0;
+    transform: scale(0.95) translateY(-4px);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+  }
+}
+
+@keyframes menu-exit {
+  from {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+  }
+  to {
+    opacity: 0;
+    transform: scale(0.95) translateY(-4px);
+  }
+}
+.pr-open-local { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; line-height: 18px; }
+.pr-open-local > span { color: var(--pr-error); }
+.pr-sr-only { position: absolute; width: 1px; height: 1px; padding: 0; overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0; }
+@container (max-width: 520px) {
+  .pr-toolbar { flex-wrap: wrap; gap: 6px; padding: 8px; }
+  .pr-title-row { flex-basis: 100%; width: 100%; }
+  .pr-controls { justify-content: space-between; flex: 1 1 100%; width: 100%; gap: 4px; }
+  .pr-toolbar-status, .pr-capture-status { max-width: 42%; }
+  .pr-pages { padding-inline: 12px; }
+  .pr-control-group { gap: 1px; }
+  .pr-page-input input { width: 38px; }
+  .pr-page-count { max-width: 54px; overflow: hidden; text-overflow: ellipsis; }
+  .pr-notice { right: 8px; bottom: 8px; left: 8px; }
+}
+@starting-style {
+  .pr-toolbar-status:not([data-kind="progress"]) { opacity: 0; }
+  .pr-notice { opacity: 0; transform: translateY(4px); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .pr-shell button, .pr-local button, .pr-open-local button, .pr-toolbar-status, .pr-notice { transition: none; }
+  .pr-shell button:active, .pr-local button:active, .pr-open-local button:active, .pr-file-button:active, .pr-notice { transform: none !important; }
+  .pr-selection-menu { animation: none; }
+  .pr-selection-menu[data-closing] { animation: none; opacity: 0; }
+  @starting-style { .pr-toolbar-status, .pr-notice { opacity: 1; transform: none; } }
+}
+@media (pointer: coarse) {
+  .pr-shell button, .pr-local button, .pr-open-local button, .pr-file-button { min-width: 44px; min-height: 44px; }
+  .pr-controls button, .pr-open-local > button { width: 44px; height: 44px; min-height: 44px; }
+  .pr-page-input input { width: 44px; height: 44px; }
+  .pr-controls { gap: 4px; flex-wrap: wrap; }
+  .pr-divider { display: none; }
+}
+@media (forced-colors: active) {
+  .pr-shell, .pr-local, .pr-open-local { --pr-surface: Canvas; --pr-surround: Canvas; --pr-ink: CanvasText; --pr-muted: CanvasText; --pr-border: ButtonBorder; --pr-accent: Highlight; --pr-menu: Canvas; --pr-hover: transparent; --pr-pressed: transparent; --pr-error: CanvasText; }
+  .pr-hover-highlight { forced-color-adjust: none; background: transparent; border: 1px solid Highlight; }
+  .pr-paragraph-outline { forced-color-adjust: none; background: transparent; border-color: Highlight; }
+  .pr-figure-highlight { forced-color-adjust: none; background: transparent; border: 2px solid Highlight; box-shadow: none; }
+  .pr-text-layer ::selection { forced-color-adjust: none; color: transparent; background: transparent; text-shadow: 1px 0 Highlight; }
+  .pr-shell button, .pr-local button, .pr-open-local button { border: 1px solid ButtonBorder; }
+  .pr-shell button:disabled, .pr-local button:disabled { color: GrayText; opacity: 1; }
+  .pr-selection-menu, .pr-notice { box-shadow: none; }
+}
+
+/* Success feedback animation */
+.pr-status-success {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--pr-accent);
+  animation: success-flash 300ms cubic-bezier(0.23, 1, 0.32, 1);
+}
+
+.pr-status-icon {
+  width: 14px;
+  height: 14px;
+  animation: check-pop 300ms cubic-bezier(0.23, 1, 0.32, 1);
+}
+
+@keyframes success-flash {
+  0% {
+    background-color: color-mix(in srgb, var(--pr-accent) 20%, transparent);
+  }
+  100% {
+    background-color: transparent;
+  }
+}
+
+@keyframes check-pop {
+  0% {
+    transform: scale(0);
+    opacity: 0;
+  }
+  50% {
+    transform: scale(1.2);
+  }
+  100% {
+    transform: scale(1);
+    opacity: 1;
+  }
+}
+
+/* Page transition */
+.pr-page {
+  transition: opacity 200ms cubic-bezier(0.23, 1, 0.32, 1);
+}
+
+/* Dim only while nothing has been drawn yet; placeholders and re-renders stay at full opacity. */
+.pr-page[data-canvas-status="loading"] {
+  opacity: 0.6;
+}
+
+/* Loading skeleton */
+.pr-page-skeleton {
+  position: absolute;
+  inset: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 20px;
+}
+
+.pr-skeleton-line {
+  height: 12px;
+  background: linear-gradient(90deg,
+    color-mix(in srgb, var(--pr-muted) 10%, transparent) 25%,
+    color-mix(in srgb, var(--pr-muted) 20%, transparent) 50%,
+    color-mix(in srgb, var(--pr-muted) 10%, transparent) 75%
+  );
+  background-size: 200% 100%;
+  animation: skeleton-pulse 1.5s ease-in-out infinite;
+  border-radius: 4px;
+}
+
+@keyframes skeleton-pulse {
+  0% { background-position: 200% 0; }
+  100% { background-position: -200% 0; }
+}
+
+/* Reduced motion for new animations */
+@media (prefers-reduced-motion: reduce) {
+  .pr-status-success,
+  .pr-status-icon {
+    animation: none;
+  }
+  .pr-page {
+    transition: none;
+  }
+  .pr-skeleton-line {
+    animation: none;
+    background: color-mix(in srgb, var(--pr-muted) 15%, transparent);
+  }
+}

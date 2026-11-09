@@ -1,0 +1,10 @@
+node_modules/
+test-results/
+*.log
+.DS_Store
+
+# lib/ is committed on purpose: DSH installs this plugin from GitHub
+# without running a build step, so the prebuilt bundle must be in the repo.
+
+.chrome-paper-test*/
+test-paper.pdf
