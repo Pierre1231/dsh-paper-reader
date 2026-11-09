@@ -4,9 +4,10 @@
  * Geometry is a port of pdf.js 4.10.38 `TextLayer#appendText/#layout`
  * (Apache-2.0, see PDFJS-LICENSE) with three deliberate differences:
  *
- * 1. Spans are created in a detached `div.pr-text-chunk` (CSS
- *    `display: contents`) and each finished chunk is inserted with ONE DOM
- *    operation. pdf.js appends every span to the live page and sets the font
+ * 1. Each time slice builds its spans in a detached DocumentFragment and
+ *    inserts them with ONE DOM operation. (Spans stay direct children of the
+ *    layer, as in pdf.js: wrapper elements break drag selection, see
+ *    selectionGuard.ts.) pdf.js appends every span to the live page and sets the font
  *    of a measuring canvas attached to `document.body` in between, which makes
  *    the host recompute style for each span and gives host MutationObservers,
  *    extensions and accessibility one record per span.
@@ -193,8 +194,7 @@ export function createTextLayerJob({ content, viewport, container, deviceScale, 
   let chunks = 0;
   const run = (deadline: number): boolean => {
     const measure = getMeasure(lang, container);
-    const chunk = doc.createElement('div');
-    chunk.className = 'pr-text-chunk';
+    const chunk = doc.createDocumentFragment();
     let added = 0;
     let steps = 0;
     while (index < items.length && spans < MAX_SPANS) {

@@ -10,6 +10,7 @@ const compiled = ts.transpileModule(source, {
 const {
   buildPdfVisualLines,
   groupPdfVisualLines,
+  attachPdfScripts,
   findPdfParagraph,
 } = await import(`data:text/javascript;base64,${Buffer.from(compiled.outputText).toString('base64')}`);
 
@@ -182,4 +183,65 @@ test('DOM lookup excludes markedContent, copies line rects and caches by layer',
   assert.equal(paragraph.rects[0].top, firstBounds.top + 200);
   assert.equal(layer.queryCount, 1);
   assert.equal(findPdfParagraph({}, layer, 2), null);
+});
+
+// Display equation (1) of "Attention Is All You Need", in CSS px at scale 1
+// (top = page height - PDF baseline - ascent). Numerator and denominator sit
+// on their own baselines, scripts are 7 px.
+const equation = () => [
+  fragment('Attention(', 220, 472.8, 45.7, 10, 10),
+  fragment('Q, K, V', 265.6, 472.8, 31.2, 10, 10),
+  fragment(') = softmax(', 299.0, 472.8, 55.4, 10, 10),
+  fragment('QK', 355.6, 466.0, 16.3, 10, 10),
+  fragment('T', 372.7, 464.8, 4.7, 7, 7),
+  fragment('√', 358.1, 472.5, 8.3, 10, 10),
+  fragment('d', 366.4, 480.2, 5.2, 10, 10),
+  fragment('k', 371.6, 483.3, 4.2, 7, 7),
+  // In the browser the unstretched "√" renders narrower, leaving a 16 px gap
+  // that splits ")V" into its own segment on the main baseline.
+  fragment(')', 382.1, 472.8, 3.9, 10, 10),
+  fragment('V', 386.0, 472.8, 5.8, 10, 10),
+  fragment('(1)', 493.1, 472.8, 11.6, 10, 10),
+];
+
+test('a display equation with a fraction and scripts becomes one hover paragraph', () => {
+  const plain = groupPdfVisualLines(buildPdfVisualLines(equation()));
+  assert.ok(plain.length > 1, 'without attachment the formula is split');
+  const groups = groupPdfVisualLines(attachPdfScripts(buildPdfVisualLines(equation())));
+  const line = groups.flat().find(item => item.text.includes('Attention('));
+  assert.ok(groups.flat().some(item => item.text === '(1)' && item !== line), 'the equation number stays separate');
+  for (const piece of ['Attention(', 'QK', 'T', '√', 'd', 'k', ')V']) assert.ok(line.text.includes(piece), piece);
+  assert.equal(line.rect.left, 220);
+  assert.ok(line.rect.top <= 464.8 && line.rect.top + line.rect.height >= 490.3, 'covers numerator, superscript and subscript');
+});
+
+test('inline sub/superscripts stay in their prose line and do not break the paragraph', () => {
+  const lines = attachPdfScripts(buildPdfVisualLines([
+    fragment('values of d', 50, 0, 60, 10, 10),
+    fragment('k', 110, 3, 4, 7, 7),
+    fragment(', the dot products', 115, 0, 90, 10, 10),
+    fragment('grow large in magnitude', 50, 12, 120, 10, 10),
+  ]));
+  const paragraphs = groupPdfVisualLines(lines);
+  assert.equal(paragraphs.length, 1);
+  assert.equal(paragraphs[0].length, 2);
+});
+
+test('attachment leaves prose lines, columns and table rows alone', () => {
+  const prose = attachPdfScripts(buildPdfVisualLines([
+    fragment('First line of text', 50, 0, 200, 10, 10),
+    fragment('Second line of text', 50, 12, 200, 10, 10),
+  ]));
+  assert.equal(prose.length, 2, 'stacked prose lines do not overlap');
+  const columns = attachPdfScripts(buildPdfVisualLines([
+    fragment('Left column line', 50, 0, 200, 10, 10),
+    fragment('Right column line', 270, 4, 200, 10, 10),
+  ]));
+  assert.equal(columns.length, 2, 'overlapping lines in different columns stay apart');
+  const table = attachPdfScripts(buildPdfVisualLines([
+    fragment('Method', 50, 0, 40, 10, 10),
+    fragment('BLEU', 120, 0, 30, 10, 10),
+    fragment('28.4', 180, 0, 24, 10, 10),
+  ]));
+  assert.equal(table.length, 3, 'cells on one baseline are not merged');
 });

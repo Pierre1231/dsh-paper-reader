@@ -127,6 +127,83 @@ export function buildPdfVisualLines(fragments: PdfTextFragment[]): PdfVisualLine
   return lines.filter(line => line.text).sort((a, b) => a.rect.top - b.rect.top || a.rect.left - b.rect.left);
 }
 
+const baselineOf = (line: PdfVisualLine) => bottom(line.rect);
+
+function readingOrder(a: PdfTextFragment, b: PdfTextFragment): number {
+  // The text layer follows the PDF content stream, which is the order the
+  // author wrote the formula in (numerator before denominator, base before
+  // script). Pure geometry tests have no elements: fall back to x order.
+  if (a.element && b.element && a.element !== b.element) {
+    return a.element.compareDocumentPosition(b.element) & Node.DOCUMENT_POSITION_FOLLOWING ? -1 : 1;
+  }
+  return a.rect.left - b.rect.left || a.rect.top - b.rect.top;
+}
+
+/**
+ * Attach sub/superscripts, fraction numerators/denominators and radicands to
+ * the line they belong to. Such a "satellite" sits on a different baseline
+ * (and usually a smaller size), so line building and the paragraph rules
+ * (font ratio, one successor) split a display equation into fragments and a
+ * hover only covered part of it. A satellite overlaps its host vertically and
+ * lies within or right next to it horizontally; prose lines never overlap
+ * vertically, and table cells share a baseline, so neither is affected.
+ */
+export function attachPdfScripts(input: PdfVisualLine[]): PdfVisualLine[] {
+  const lines = input.slice();
+  const host = lines.map((_, index) => index);
+  const find = (index: number): number => host[index] === index ? index : (host[index] = find(host[index]));
+  const weight = (line: PdfVisualLine) => line.fontSize * 1000 + line.text.length;
+  for (let a = 0; a < lines.length; a++) {
+    for (let b = a + 1; b < lines.length; b++) {
+      const first = lines[a], second = lines[b];
+      const size = Math.max(first.fontSize, second.fontSize);
+      if (Math.abs(baselineOf(first) - baselineOf(second)) < size * 0.2) continue;
+      if (verticalOverlap(first.rect, second.rect) < Math.min(first.rect.height, second.rect.height) * 0.15) continue;
+      const [small, large] = weight(first) <= weight(second) ? [first, second] : [second, first];
+      const reach = large.fontSize * 1.2;
+      if (small.rect.left < large.rect.left - reach || right(small.rect) > right(large.rect) + reach) continue;
+      const ra = find(a), rb = find(b);
+      if (ra !== rb) host[ra] = rb;
+    }
+  }
+  // A formula's own pieces on its main baseline can be split apart by a gap
+  // (an unstretched one-glyph span such as "√" renders narrower than in the
+  // PDF). Rejoin same-baseline neighbours of a formula within two glyph widths;
+  // an equation number far to the right stays separate.
+  const sizes = () => { const count = new Map<number, number>(); lines.forEach((_, index) => count.set(find(index), (count.get(find(index)) || 0) + 1)); return count; };
+  for (let changed = true; changed;) {
+    changed = false;
+    const count = sizes();
+    for (let a = 0; a < lines.length; a++) {
+      for (let b = 0; b < lines.length; b++) {
+        if (a === b || find(a) === find(b) || (count.get(find(a)) || 0) < 2) continue;
+        const formula = lines[a], piece = lines[b];
+        const size = Math.max(formula.fontSize, piece.fontSize);
+        if (Math.abs(baselineOf(formula) - baselineOf(piece)) >= size * 0.2) continue;
+        if (verticalOverlap(formula.rect, piece.rect) < Math.min(formula.rect.height, piece.rect.height) * 0.5) continue;
+        const gap = Math.max(piece.rect.left - right(formula.rect), formula.rect.left - right(piece.rect));
+        if (gap > size * 2) continue;
+        host[find(b)] = find(a);
+        changed = true;
+      }
+    }
+  }
+  const clusters = new Map<number, PdfVisualLine[]>();
+  lines.forEach((line, index) => {
+    const root = find(index);
+    const cluster = clusters.get(root);
+    if (cluster) cluster.push(line); else clusters.set(root, [line]);
+  });
+  const merged: PdfVisualLine[] = [];
+  for (const cluster of clusters.values()) {
+    if (cluster.length === 1) { merged.push(cluster[0]); continue; }
+    const base = cluster.reduce((best, line) => weight(line) > weight(best) ? line : best);
+    const fragments = cluster.flatMap(line => line.fragments).sort(readingOrder);
+    merged.push({ text: joinFragments(fragments), rect: unionRects(cluster.map(line => line.rect)), fontSize: base.fontSize, fragments });
+  }
+  return merged.sort((a, b) => a.rect.top - b.rect.top || a.rect.left - b.rect.left);
+}
+
 function hasColumnOverlap(a: PdfVisualLine, b: PdfVisualLine): boolean {
   const minimumWidth = Math.min(a.rect.width, b.rect.width);
   return horizontalOverlap(a.rect, b.rect) >= Math.max(1, minimumWidth * 0.15);
@@ -225,7 +302,7 @@ function collectFragments(layer: HTMLElement): PdfTextFragment[] {
 }
 
 function buildParagraphs(layer: HTMLElement, pageNumber: number): PdfParagraph[] {
-  const groups = groupPdfVisualLines(buildPdfVisualLines(collectFragments(layer)));
+  const groups = groupPdfVisualLines(attachPdfScripts(buildPdfVisualLines(collectFragments(layer))));
   return groups.map((lines, index) => ({
     key: `pdf-${pageNumber}-paragraph-${index + 1}`,
     elements: lines.flatMap(line => line.fragments.flatMap(fragment => fragment.element ? [fragment.element] : [])),

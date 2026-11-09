@@ -190,7 +190,7 @@ export async function runProbe(): Promise<Record<string, unknown>> {
     // Detached build, one insertion.
     let layer = make(); host.appendChild(layer); layer.getBoundingClientRect();
     let start = performance.now();
-    const chunk = document.createElement('div'); chunk.className = 'pr-text-chunk';
+    const chunk = document.createDocumentFragment();
     for (let index = 0; index < count; index++) chunk.appendChild(span(index));
     layer.appendChild(chunk); layer.getBoundingClientRect();
     result.detachedInsert300Ms = round(performance.now() - start);
@@ -222,7 +222,7 @@ export function buildTraceReport() {
   const sum = (values: Array<number | undefined>) => round(values.reduce<number>((total, value) => total + (value || 0), 0));
   return {
     plugin: 'dsh-paper-reader',
-    version: '0.6.0',
+    version: '0.6.1',
     generatedAt: new Date().toISOString(),
     uptimeMs: Date.now() - state.loadedAt,
     environment: {

@@ -10,6 +10,7 @@ import { createTextLayerJob, hasSelectableText } from './textLayer';
 import { createResidency, type Residency } from './residency';
 import { openPdfDocument, type PdfHandle } from './documentStore';
 import { pdfContentKey } from './contentKey';
+import { installSelectionGuard } from './selectionGuard';
 import { buildTraceReport, runProbe, traceEvent, traceMount, tracePage, traceTextSlice } from './trace';
 
 export type PdfReaderAction = "explain" | "translate" | "ask" | "copy";
@@ -817,6 +818,12 @@ function PdfReaderInstance({ instance, contentKey, data, fileName, sessionId, wo
     document.addEventListener("selectionchange", updateSelection);
     return () => document.removeEventListener("selectionchange", updateSelection);
   }, [enableTextLayer, pdf, residency]);
+
+  useEffect(() => {
+    const root = rootRef.current;
+    if (!root || !pdf || !enableTextLayer) return;
+    return installSelectionGuard(root);
+  }, [enableTextLayer, pdf]);
 
   useEffect(() => {
     const root = rootRef.current;

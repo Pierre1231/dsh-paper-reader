@@ -102,11 +102,8 @@
 .pr-message[role="alert"] { color: var(--pr-error); }
 /* PDF.js positions text using these variables and inline transforms. */
 .pr-text-layer { position: absolute; inset: 0; z-index: 1; overflow: clip; opacity: 1; line-height: 1; text-align: initial; text-size-adjust: none; forced-color-adjust: none; transform-origin: 0 0; }
-.pr-text-layer :is(span, br) { position: absolute; color: transparent; white-space: pre; cursor: text; transform-origin: 0 0; }
+.pr-text-layer :is(span, br) { position: absolute; z-index: 1; color: transparent; white-space: pre; cursor: text; transform-origin: 0 0; }
 .pr-text-layer span.markedContent { top: 0; height: 0; }
-/* Spans are inserted in groups; the group itself must not create a box. */
-.pr-text-chunk { display: contents; }
-.pr-text-layer > :not(.markedContent), .pr-text-layer .markedContent span:not(.markedContent) { z-index: 1; }
 .pr-text-layer span[role="img"] { user-select: none; cursor: default; }
 .pr-text-layer ::selection { color: transparent; background: color-mix(in srgb, var(--pr-accent) 18%, transparent); }
 .pr-text-layer br::selection { background: transparent; }
@@ -114,6 +111,8 @@
 .pr-figure-highlight { position: fixed; z-index: 900; pointer-events: none; border: 0; border-radius: 4px; background: transparent; box-shadow: inset 0 0 0 2px var(--pr-accent); }
 .pr-selection-menu { position: fixed; z-index: 1000; display: flex; width: max-content; flex-wrap: wrap; gap: 2px; max-width: calc(100vw - 16px); padding: 4px; border: 1px solid var(--pr-border); border-radius: 8px; color: var(--pr-ink); background: var(--pr-menu); background-color: var(--pr-menu); box-shadow: 0 8px 24px rgb(0 0 0 / 16%), 0 2px 6px rgb(0 0 0 / 12%); animation: menu-enter 150ms cubic-bezier(0.23, 1, 0.32, 1); transform-origin: top center; }
 .pr-selection-menu[data-closing] { animation: menu-exit 100ms cubic-bezier(0.23, 1, 0.32, 1) forwards; }
+/* While a text drag is in progress (selectionGuard.ts) the action menu would follow every pointer move. */
+.pr-reader[data-text-dragging] .pr-selection-menu { visibility: hidden !important; pointer-events: none; }
 .pr-selection-menu button { gap: 6px; min-height: 32px; padding: 6px 10px; color: inherit; font-size: 14px; line-height: 20px; white-space: nowrap; }
 
 /* Menu animations */
