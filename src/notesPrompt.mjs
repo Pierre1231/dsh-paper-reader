@@ -10,10 +10,14 @@
  * Requirements encoded here come from the user's decisions:
  * - organize by paper chapters, not conversation timeline
  * - per item: 疑问 + 解答 + 重要性
+ * - answers keep the derivation, the numbers and the limits of validity,
+ *   not just the conclusion
  * - keep corrected understandings, drop the wrong guesses themselves
  * - keep "是不是这样理解" confirmations and "为什么" follow-ups
  * - ignore tool actions (translate/copy) and chit-chat
  * - open with a short paper overview for quick recall
+ * - embed the paper's key figures/tables: crop them next to the notes under
+ *   `figures/`, reference them with relative paths, add a figure index
  * - save to {workspace root}/{paper title}/论文笔记.md
  */
 
@@ -68,7 +72,7 @@ Markdown 格式（.md 文件）。
 ## 每个章节下，整理我在阅读中暴露出的疑问点，每条包含：
 
 - **疑问**：我当时的问题或困惑（保留我自己的问法）
-- **解答**：经过讨论后确认下来的正确理解
+- **解答**：经过讨论后确认下来的正确理解；把推导过程、具体数字和适用边界一并留下，不要只写结论
 - **重要性**：一句话说明为什么值得记住——它支撑了论文的哪个关键逻辑
 
 ## 特别保留这些材料（它们是我理解这篇论文的真实轨迹，非常宝贵）：
@@ -81,6 +85,17 @@ Markdown 格式（.md 文件）。
 
 - 翻译、复制等工具性请求，这些不是学习内容
 - 与论文无关的闲聊
+
+## 配图
+
+原文里与正文讨论对应的关键图、表要真的放进笔记，不要只写一句"见 Figure 3"。
+
+- 从论文 PDF 里裁出该图/表（连原文图注一起），存到笔记**同目录**的 \`figures/\` 下；文件名用 \`fig01_xxx.png\`、\`tab01_xxx.png\` 的形式，不要用哈希名。
+- 在讨论它的那一节用**相对路径**插入：\`![一句话说明](figures/fig03_main_results.png)\`；图下紧跟一行斜体，写清"这张图该看什么"，不要只贴图不说话。相对路径可保证整个文件夹能被整体移动或归档。
+- 优先收这几类：方法/训练流程总览、主结果曲线、关键消融、真机或仿真截图、方法对比表。装饰性的 teaser 可选，纯排版元素不收。
+- 笔记开头加一个「图目录」表：文件名 → 原文编号（Figure 3 / Table 1）→ 用在哪一节 → 一句话内容。
+- 用足够清晰的分辨率渲染（约 200 dpi）再裁切，保证图里的字读得清；一张图只表达一个要点时可拆成多张。
+- 环境里若没有可用的 PDF 渲染/裁图工具，就退化为在正文里写明「原文 Figure 3」并描述它画了什么；**不要编造图片、不要用网络图片代替原文图**。
 
 ## 保存方式
 

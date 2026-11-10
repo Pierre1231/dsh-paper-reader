@@ -142,3 +142,34 @@ test('generic prompt instructs deriving the folder name from the conversation', 
   assert.ok(prompt.includes('论文笔记.md'), 'Should name the notes file');
   assert.ok(prompt.includes('60'), 'Should carry the length limit rule');
 });
+
+// --- Figures (v0.7.1): notes carry the paper's own figures and tables ---
+
+test('asks for the paper figures to be embedded, not merely referenced', () => {
+  const prompt = buildNotesPrompt('paper.pdf');
+  assert.ok(prompt.includes('配图'), 'Should have a figures section');
+  assert.ok(prompt.includes('figures/'), 'Should name the figures folder');
+  assert.ok(prompt.includes('原文 Figure'), 'Should reference original figure numbering');
+});
+
+test('figure instructions demand captions, relative paths and a figure index', () => {
+  const prompt = buildNotesPrompt('paper.pdf');
+  assert.ok(prompt.includes('图注'), 'Keep the original caption');
+  assert.ok(prompt.includes('相对路径'), 'Use relative image paths');
+  assert.ok(prompt.includes('图目录'), 'Add a figure index');
+});
+
+test('figure instructions forbid inventing images when tooling is missing', () => {
+  const prompt = buildNotesPrompt('paper.pdf');
+  assert.ok(prompt.includes('不要编造'), 'Must forbid invented images');
+  assert.ok(prompt.includes('退化'), 'Must degrade to text when no renderer is available');
+});
+
+// --- Answer depth (v0.7.1): keep derivations, numbers and limits ---
+
+test('answers must keep derivations, numbers and limits of validity', () => {
+  const prompt = buildNotesPrompt('paper.pdf');
+  assert.ok(prompt.includes('推导'), 'Should keep the derivation');
+  assert.ok(prompt.includes('适用边界'), 'Should keep the limits of validity');
+  assert.ok(prompt.includes('不要只写结论'), 'Should reject conclusion-only answers');
+});

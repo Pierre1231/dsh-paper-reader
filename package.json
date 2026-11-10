@@ -1,8 +1,14 @@
 {
   "name": "dsh-paper-reader",
-  "version": "0.7.0",
+  "version": "0.7.2",
   "description": "Read PDFs beside a DSH conversation, quote selected passages, and generate discussion-based reading notes",
   "author": "Jingyi HUANG <2270737347@qq.com>",
+  "contributors": [
+    {
+      "name": "flynnmav",
+      "url": "https://github.com/flynnmav"
+    }
+  ],
   "license": "MIT",
   "repository": {
     "type": "git",
