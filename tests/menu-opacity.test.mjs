@@ -16,7 +16,6 @@ test('menu follows the host surface over an opaque fallback', () => {
     'CSS should define --pr-fallback-menu variable'
   );
   
-  // Check that --pr-menu uses --pr-fallback-menu (not the host variable)
   assert.ok(
     cssContent.includes('--pr-menu: var(--pr-surface)') &&
     cssContent.includes('linear-gradient(var(--pr-menu), var(--pr-menu)), var(--pr-fallback-menu)'),

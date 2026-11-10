@@ -8,15 +8,18 @@ import { chromium } from 'playwright-core'
 const directory = await mkdtemp(path.join(tmpdir(), 'paper-motion-'))
 const pdfPath = path.join(directory, 'motion.pdf')
 const objects = [
-  '<< /Type /Catalog /Pages 2 0 R >>',
+  '<< /Type /Catalog /Pages 2 0 R /Outlines 9 0 R >>',
   '<< /Type /Pages /Kids [3 0 R 4 0 R] /Count 2 >>',
-  '<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Resources << /Font << /F1 5 0 R >> >> /Contents 6 0 R >>',
+  '<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Resources << /Font << /F1 5 0 R >> >> /Contents 6 0 R /Annots [8 0 R] >>',
   '<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Resources << /Font << /F1 5 0 R >> >> /Contents 7 0 R >>',
   '<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>',
   ...[1, 2].map(number => {
-    const stream = `BT /F1 16 Tf 70 700 Td (Reading motion page ${number}) Tj 0 -40 Td (A paragraph for selection and search.) Tj 0 -40 Td (Another paragraph for hover feedback.) Tj ET`
+    const stream = `BT /F1 16 Tf 70 700 Td (Reading motion page ${number}) Tj 0 -40 Td (A paragraph for selection and search.) Tj 0 -40 Td (Another paragraph for hover feedback.) Tj 0 -60 Td (Jump to next chapter.) Tj ET`
     return `<< /Length ${stream.length} >>\nstream\n${stream}\nendstream`
-  })
+  }),
+  '<< /Type /Annot /Subtype /Link /Rect [70 548 370 572] /Dest [4 0 R /XYZ null 700 null] >>',
+  '<< /Type /Outlines /First 10 0 R /Last 10 0 R /Count 1 >>',
+  '<< /Title (Second chapter) /Parent 9 0 R /Dest [4 0 R /XYZ null 700 null] >>'
 ]
 let pdf = '%PDF-1.4\n'
 const offsets = [0]
@@ -157,7 +160,38 @@ try {
   await page.getByRole('button', { name: '重试发送', exact: true }).click()
   await page.waitForFunction(() => document.querySelector('.pr-toolbar-status[data-kind="success"]')?.textContent === '已发送')
   assert.deepEqual(errors, [])
-  console.log('PASS: menus, feedback, loading, zoom, mismatched host/system themes, 320–900px toolbar')
+  await page.evaluate(() => { const root = document.querySelector('.pr-scroll'); root.scrollTop = 150 })
+  const pageTop = () => page.locator('[data-pdf-page="1"]').evaluate(node => node.getBoundingClientRect().top)
+  const beforeSearch = await pageTop()
+  await page.getByRole('button', { name: '搜索', exact: true }).click()
+  assert.ok(Math.abs(await pageTop() - beforeSearch) < 2, 'opening search preserves the reading line')
+  await page.getByRole('searchbox').fill('paragraph')
+  await page.locator('.pr-search-active').first().waitFor()
+  await page.locator('.pr-location-cue').waitFor()
+  await page.getByRole('button', { name: '下一个结果', exact: true }).click()
+  await page.locator('.pr-location-cue').waitFor()
+  await page.waitForTimeout(1000)
+  assert.equal(await page.locator('.pr-location-cue').count(), 0)
+  await page.evaluate(() => { document.querySelector('.pr-scroll').scrollTop = 200 })
+  const beforeClose = await pageTop()
+  await page.getByRole('searchbox').press('Escape')
+  await page.locator('.pr-searchbar').waitFor({ state: 'detached' })
+  const afterClose = await pageTop()
+  assert.ok(Math.abs(afterClose - beforeClose) < 2, `closing search preserves the reading line (${beforeClose} → ${afterClose})`)
+  assert.equal(await page.locator('.pr-scroll').evaluate(node => node === document.activeElement), true)
+  await page.getByRole('button', { name: '目录', exact: true }).click()
+  await page.getByRole('menuitem', { name: 'Second chapter' }).click()
+  await page.locator('[data-pdf-page="2"] .pr-location-cue').waitFor()
+  await page.getByRole('button', { name: '返回第 1 页' }).click()
+  await page.locator('[data-pdf-page="1"] .pr-location-cue').waitFor()
+  await page.locator('[data-pdf-page="1"] .pr-link').click()
+  await page.locator('[data-pdf-page="2"] .pr-location-cue').waitFor()
+  await page.emulateMedia({ reducedMotion: 'reduce' })
+  assert.equal(await page.locator('.pr-location-cue').evaluate(node => getComputedStyle(node).animationName), 'none')
+  await page.getByRole('button', { name: '搜索', exact: true }).click()
+  assert.equal(await page.locator('.pr-searchbar').evaluate(node => getComputedStyle(node).transitionDuration), '0s')
+  assert.deepEqual(errors, [])
+  console.log('PASS: menus, feedback, loading, zoom, themes, responsive toolbar, anchored search, outline/link navigation')
 } finally {
   await browser?.close()
   server.kill()

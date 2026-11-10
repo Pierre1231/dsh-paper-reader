@@ -90,6 +90,7 @@ type TextStatus = 'none' | 'loading' | 'ready' | 'empty' | 'error';
 type PageSearchRect = SearchRect & { active: boolean };
 export type LinkEvent = 'activate' | 'enter' | 'leave';
 type PageProps = {
+  locationCue?: { top: number; version: number };
   doc: PdfHandle;
   night: boolean;
   searchRects?: PageSearchRect[];
@@ -137,7 +138,7 @@ function selectionCovers(element: Element): boolean {
 
 const percent = (value: number, total: number) => `${(100 * value / total).toFixed(3)}%`;
 
-const PdfPage = React.memo(function PdfPage({ doc, number, scale, textEnabled, initialSize, scrollRoot, renderQueue, textScheduler, residency, night, searchRects, onLink }: PageProps) {
+const PdfPage = React.memo(function PdfPage({ doc, number, scale, textEnabled, initialSize, scrollRoot, renderQueue, textScheduler, residency, night, searchRects, onLink, locationCue }: PageProps) {
   const hostRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const textRef = useRef<HTMLDivElement>(null);
@@ -451,6 +452,7 @@ const PdfPage = React.memo(function PdfPage({ doc, number, scale, textEnabled, i
         {nightImages.rects.map((rect, index) => <div key={index} style={{ left: percent(rect.left, nightImages.width), top: percent(rect.top, nightImages.height), width: percent(rect.width, nightImages.width), height: percent(rect.height, nightImages.height) }} />)}
       </div>}
       <div ref={textRef} className="pr-text-layer notranslate" translate="no" />
+      {locationCue && <div key={locationCue.version} className="pr-location-cue" style={{ '--pr-location-top': `${locationCue.top}%` } as React.CSSProperties} aria-hidden="true" />}
       {!!searchRects?.length && <div className="pr-search-layer" aria-hidden="true">
         {searchRects.map((rect, index) => <div key={index} className={rect.active ? 'pr-search-hit pr-search-active' : 'pr-search-hit'} style={{ left: `${rect.left}%`, top: `${rect.top}%`, width: `${rect.width}%`, height: `${rect.height}%` }} />)}
       </div>}
@@ -657,6 +659,26 @@ function PdfReaderInstance({ instance, contentKey, data, fileName, sessionId, wo
   const [panel, setPanel] = useState<'outline' | 'display' | null>(null);
   const [outline, setOutline] = useState<PdfOutlineItem[]>([]);
   const [searchOpen, setSearchOpen] = useState(false);
+  const searchPresence = usePresence(searchOpen ? true : null);
+  const searchLayoutTop = useRef<number | null>(null);
+  const changeSearchVisibility = useCallback((open: boolean) => {
+    searchLayoutTop.current = scrollRoot?.getBoundingClientRect().top ?? null;
+    setSearchOpen(open);
+  }, [scrollRoot]);
+  useLayoutEffect(() => {
+    if (scrollRoot && searchLayoutTop.current !== null) {
+      scrollRoot.scrollTop += scrollRoot.getBoundingClientRect().top - searchLayoutTop.current;
+      searchLayoutTop.current = null;
+    }
+  }, [searchPresence.value, scrollRoot]);
+  const [navigationCue, setNavigationCue] = useState<{ page: number; top: number; version: number } | null>(null);
+  const cueVersion = useRef(0);
+  const signalLocation = useCallback((page: number, top: number) => setNavigationCue({ page, top, version: ++cueVersion.current }), []);
+  useEffect(() => {
+    if (!navigationCue) return;
+    const timer = setTimeout(() => setNavigationCue(null), 900);
+    return () => clearTimeout(timer);
+  }, [navigationCue]);
   const [query, setQuery] = useState('');
   const [hits, setHits] = useState<SearchHit[]>([]);
   const [activeHit, setActiveHit] = useState(0);
@@ -1010,8 +1032,9 @@ function PdfReaderInstance({ instance, contentKey, data, fileName, sessionId, wo
     const rect = element.getBoundingClientRect();
     const within = 'offset' in dest ? dest.offset * rect.height : (dest.top ?? 0) * scaleRef.current;
     scrollRoot.scrollTop += rect.top - scrollRoot.getBoundingClientRect().top - 16 + within;
+    signalLocation(dest.page, rect.height > 0 ? within / rect.height * 100 : 0);
     setMenu(null);
-  }, [scrollRoot]);
+  }, [scrollRoot, signalLocation]);
 
   useEffect(() => {
     if (!returnPoint) return;
@@ -1125,10 +1148,11 @@ function PdfReaderInstance({ instance, contentKey, data, fileName, sessionId, wo
     const bounds = scrollRoot.getBoundingClientRect();
     const target = rect.top + hit.rects[0].top / 100 * rect.height;
     if (target < bounds.top + 40 || target > bounds.bottom - 60) scrollRoot.scrollTop += target - (bounds.top + scrollRoot.clientHeight * 0.3);
-  }, [activeHit, hits, scrollRoot]);
+    signalLocation(hit.page, hit.rects[0].top);
+  }, [activeHit, hits, scrollRoot, signalLocation]);
 
-  useEffect(() => { if (searchOpen) searchInputRef.current?.focus(); }, [searchOpen]);
-  const closeSearch = useCallback(() => { setSearchOpen(false); setHits([]); setQuery(''); scrollRoot?.focus({ preventScroll: true }); }, [scrollRoot]);
+  useEffect(() => { if (searchOpen) searchInputRef.current?.focus({ preventScroll: true }); }, [searchOpen]);
+  const closeSearch = useCallback(() => { changeSearchVisibility(false); setHits([]); setQuery(''); scrollRoot?.focus({ preventScroll: true }); }, [scrollRoot, changeSearchVisibility]);
   const stepHit = useCallback((delta: number) => setActiveHit(index => hits.length ? (index + delta + hits.length) % hits.length : 0), [hits.length]);
 
   useEffect(() => {
@@ -1337,7 +1361,7 @@ function PdfReaderInstance({ instance, contentKey, data, fileName, sessionId, wo
     }
     if ((event.ctrlKey || event.metaKey) && !event.altKey && !event.shiftKey && event.key.toLowerCase() === 'f' && pdf) {
       event.preventDefault();
-      if (searchOpen) searchInputRef.current?.select(); else setSearchOpen(true);
+      if (searchOpen) searchInputRef.current?.select(); else changeSearchVisibility(true);
       return;
     }
     if (event.key === 'Escape') {
@@ -1446,7 +1470,7 @@ function PdfReaderInstance({ instance, contentKey, data, fileName, sessionId, wo
             </React.Fragment>}
           </span>
           <div className="pr-tool-group">
-            <button type="button" className="pr-tool" aria-label="搜索" title="搜索（Ctrl+F）" aria-pressed={searchOpen} disabled={!pdf} onClick={() => searchOpen ? closeSearch() : setSearchOpen(true)}><ReaderIcon name="search" /></button>
+            <button type="button" className="pr-tool" aria-label="搜索" title="搜索（Ctrl+F）" aria-pressed={searchOpen} disabled={!pdf} onClick={() => searchOpen ? closeSearch() : changeSearchVisibility(true)}><ReaderIcon name="search" /></button>
             {outline.length > 0 && <button type="button" className="pr-tool" data-panel-toggle aria-label="目录" title="目录" aria-haspopup="menu" aria-expanded={panel === 'outline'} onClick={() => setPanel(current => current === 'outline' ? null : 'outline')}><ReaderIcon name="outline" /></button>}
             <button type="button" className="pr-tool" data-panel-toggle aria-label="显示设置" title="显示设置" aria-haspopup="dialog" aria-expanded={panel === 'display'} onClick={() => setPanel(current => current === 'display' ? null : 'display')}><ReaderIcon name="display" /></button>
             {onGenerateNotes && <button type="button" className="pr-notes-entry" title="生成阅读笔记" aria-label="生成阅读笔记" onClick={onGenerateNotes}><ReaderIcon name="notes" /><span className="pr-notes-entry-label">笔记</span></button>}
@@ -1478,20 +1502,20 @@ function PdfReaderInstance({ instance, contentKey, data, fileName, sessionId, wo
           <label className="pr-switch"><input type="checkbox" checked={prefs.hoverMenu} onChange={event => { setPrefs({ hoverMenu: event.target.checked }); setMenu(null); }} /><span>悬停显示操作</span><small>停在段落或图表上时出现解释、翻译等</small></label>
         </div>}
       </div>
-      {searchOpen && <div className="pr-searchbar" role="search">
+      {searchPresence.value && <div className="pr-searchbar" role="search" data-closing={searchPresence.closing ? '' : undefined} aria-hidden={searchPresence.closing || undefined}>
         <ReaderIcon name="search" />
-        <input ref={searchInputRef} type="search" aria-label="在文档中搜索" placeholder="搜索文档" value={query} onChange={event => setQuery(event.target.value)} onKeyDown={event => {
+        <input ref={searchInputRef} type="search" disabled={searchPresence.closing} aria-label="在文档中搜索" placeholder="搜索文档" value={query} onChange={event => setQuery(event.target.value)} onKeyDown={event => {
           if (event.key === 'Enter') { event.preventDefault(); stepHit(event.shiftKey ? -1 : 1); }
           else if (event.key === 'Escape') { event.preventDefault(); event.stopPropagation(); closeSearch(); }
         }} />
         <span className="pr-search-count" aria-live="polite">{searching ? '搜索中…' : query.trim() ? (hits.length ? `${activeHit + 1} / ${hits.length}` : '无结果') : ''}</span>
         <button type="button" aria-label="上一个结果" title="上一个（Shift+Enter）" disabled={!hits.length} onClick={() => stepHit(-1)}><ReaderIcon name="up" /></button>
         <button type="button" aria-label="下一个结果" title="下一个（Enter）" disabled={!hits.length} onClick={() => stepHit(1)}><ReaderIcon name="down" /></button>
-        <button type="button" aria-label="关闭搜索" title="关闭（Esc）" onClick={closeSearch}><ReaderIcon name="close" /></button>
+        <button type="button" aria-label="关闭搜索" disabled={searchPresence.closing} title="关闭（Esc）" onClick={closeSearch}><ReaderIcon name="close" /></button>
       </div>}
       <div className="pr-scroll" ref={setScrollRoot} tabIndex={0} aria-label="PDF 页面，使用左右方向键切换页面，加减号缩放">
         {error ? <div className="pr-message" role="alert">无法打开 PDF：{error}</div> : !pdf ? <div className="pr-message" role="status">正在打开 PDF…</div> : (
-          <div className="pr-pages">{Array.from({ length: pdf.numPages }, (_, index) => <PdfPage key={index + 1} doc={doc!} number={index + 1} scale={scale} textEnabled={enableTextLayer} initialSize={initialSize} scrollRoot={scrollRoot} renderQueue={renderQueue} textScheduler={textScheduler} residency={residency} night={prefs.night} searchRects={searchByPage.get(index + 1)} onLink={onLink} />)}</div>
+          <div className="pr-pages">{Array.from({ length: pdf.numPages }, (_, index) => <PdfPage key={index + 1} doc={doc!} number={index + 1} scale={scale} textEnabled={enableTextLayer} initialSize={initialSize} scrollRoot={scrollRoot} renderQueue={renderQueue} textScheduler={textScheduler} residency={residency} night={prefs.night} searchRects={searchByPage.get(index + 1)} onLink={onLink} locationCue={navigationCue?.page === index + 1 ? navigationCue : undefined} />)}</div>
         )}
       </div>
       {returnPoint && <button type="button" className="pr-return-chip" onClick={() => { const point = returnPoint; setReturnPoint(null); goToDestination(point); }}><ReaderIcon name="back" />返回第 {returnPoint.page} 页</button>}

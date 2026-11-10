@@ -38,3 +38,7 @@ npm run build
 ```
 
 在 DSH 插件管理器中添加本地项目目录并启用即可。版本变更见 [更新日志](CHANGELOG.md)。
+
+动效与视觉交互回归：先运行 `npm run build`，再运行 `npm run test:motion`。测试会生成临时双页 PDF，在隔离的本地服务中检查菜单开合、悬停、操作反馈、加载、缩放、交叉主题、窄屏、搜索及引用跳转，不调用真实模型。macOS 默认使用已安装的 Microsoft Edge；其他浏览器通过 `CHROME_PATH` 指定 Chromium 可执行文件。主题截图保存在 `test-results/motion/`。
+
+视觉优化按功能独立提交，且每次提交包含 `lib/client.js` 构建产物。需要撤销某项时使用 `git revert <提交号>`；若后续功能依赖它，按提交的逆序逐项回退。重新加载插件或重启 DSH 后生效。

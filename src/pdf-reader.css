@@ -154,6 +154,12 @@
 .pr-searchbar { display: flex; flex: none; align-items: center; gap: 4px; padding: 6px 8px 6px 12px; border-bottom: 1px solid var(--pr-border); background: var(--pr-surface); color: var(--pr-muted); }
 .pr-searchbar input { flex: 1 1 auto; min-width: 60px; height: 30px; padding: 4px 8px; border: 1px solid var(--pr-border); border-radius: 6px; color: var(--pr-ink); background: var(--pr-surface); font: inherit; font-size: 13px; line-height: 20px; }
 .pr-searchbar input:focus-visible { outline: 2px solid var(--pr-accent); outline-offset: 0; }
+.pr-searchbar { opacity: 1; transform: none; transition: opacity 140ms ease-out, transform 140ms ease-out; }
+.pr-scroll { overflow-anchor: none; }
+.pr-searchbar[data-closing] { opacity: 0; transform: translateY(-3px); transition-duration: 90ms; pointer-events: none; }
+@starting-style { .pr-searchbar { opacity: 0; transform: translateY(-3px); } }
+.pr-location-cue { position: absolute; z-index: 2; left: 16px; right: 16px; top: clamp(0px, var(--pr-location-top), calc(100% - 32px)); height: 32px; pointer-events: none; border-inline-start: 3px solid var(--pr-pdf-mark); background: color-mix(in srgb, var(--pr-pdf-mark) 10%, transparent); animation: pr-location-arrive 900ms ease-out forwards; }
+@keyframes pr-location-arrive { 0%, 60% { opacity: 1; } 100% { opacity: 0; } }
 .pr-search-count { flex: none; min-width: 44px; font-size: 12px; line-height: 18px; text-align: center; font-variant-numeric: tabular-nums; }
 .pr-searchbar button { width: 30px; height: 30px; min-height: 30px; padding: 0; }
 .pr-search-layer { position: absolute; inset: 0; z-index: 2; pointer-events: none; }
@@ -230,6 +236,8 @@
   .pr-shell button:active, .pr-local button:active, .pr-open-local button:active, .pr-file-button:active, .pr-notice { transform: none !important; }
   .pr-selection-menu, .pr-popover, .pr-link-preview { animation: none; transition: none; }
   .pr-paragraph-outline, .pr-figure-highlight { transition: none; }
+  .pr-searchbar { transition: none; transform: none; }
+  .pr-location-cue { animation: none; }
   .pr-selection-menu[data-closing] { animation: none; opacity: 0; }
   @starting-style { .pr-toolbar-status, .pr-notice { opacity: 1; transform: none; } }
 }
@@ -254,6 +262,7 @@
   .pr-selection-menu, .pr-notice { box-shadow: none; }
   .pr-search-hit, .pr-search-active { forced-color-adjust: none; background: transparent; mix-blend-mode: normal; box-shadow: inset 0 0 0 2px Highlight; }
   .pr-popover, .pr-link-preview, .pr-return-chip { box-shadow: none; }
+  .pr-location-cue { background: transparent; border-color: Highlight; }
 }
 
 /* Success feedback animation */
