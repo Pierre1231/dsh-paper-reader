@@ -1164,7 +1164,7 @@ function PdfReaderInstance({ instance, contentKey, data, fileName, sessionId, wo
       closeTimer = setTimeout(() => {
         closeTimer = undefined;
         if (!focused()) setMenu(current => current?.mode === 'selection' ? current : null);
-      }, 800);
+      }, 250);
     };
     const HOVER_DELAY = 120; // Reduced from 180ms for better responsiveness
     const POSITION_THRESHOLD = 5; // Pixels - position changes beyond this reset the timer
@@ -1189,7 +1189,6 @@ function PdfReaderInstance({ instance, contentKey, data, fileName, sessionId, wo
         clearHoverTimer(); clearCloseTimer();
       }
 
-      if (current?.mode !== 'selection') setMenu(null);
       pending = { key, mode, activate, position };
       const ticket = hoverTicket;
       hoverTimer = setTimeout(() => {
