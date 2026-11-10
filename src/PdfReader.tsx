@@ -4,6 +4,7 @@ import { findPdfParagraph, type PdfParagraphRect } from './paragraphs';
 import { collectPdfFigures, findPdfFigureAtPoint, invalidatePdfFigureCache, type PdfFigure } from './figures';
 import { positionMarginOverlay, positionReaderOverlay, isPointInOverlayBridge, type OverlayRect } from './overlayGeometry';
 import { ReaderIcon } from './icons';
+import { usePresence } from './usePresence';
 import { createPdfRenderQueue, type PdfRenderQueue } from './renderQueue';
 import { createTaskScheduler, type TaskScheduler } from './taskScheduler';
 import { createTextLayerJob, hasSelectableText } from './textLayer';
@@ -612,6 +613,8 @@ function PdfReaderInstance({ instance, contentKey, data, fileName, sessionId, wo
   const [initialSize, setInitialSize] = useState({ width: 612, height: 792 });
   const [scrollRoot, setScrollRoot] = useState<HTMLDivElement | null>(null);
   const [menu, setMenuState] = useState<MenuState | null>(null);
+  const menuPresence = usePresence(menu);
+  const visibleMenu = menuPresence.value;
   const menuRef = useRef<MenuState | null>(null);
   const setMenu = useCallback((update: React.SetStateAction<MenuState | null>) => {
     // Pointer frames can arrive between scheduling a React update and commit.
@@ -703,7 +706,8 @@ function PdfReaderInstance({ instance, contentKey, data, fileName, sessionId, wo
   }, [preparingFigures]);
 
   useLayoutEffect(() => {
-    if (!menu || !scrollRoot || !menuElementRef.current) { setMenuPosition(null); return; }
+    if (!visibleMenu || !scrollRoot || !menuElementRef.current) { setMenuPosition(null); return; }
+    if (!menu) return;
     const element = menuElementRef.current;
     const bounds = scrollRoot.getBoundingClientRect();
     const viewport = window.visualViewport;
@@ -728,7 +732,7 @@ function PdfReaderInstance({ instance, contentKey, data, fileName, sessionId, wo
     element.style.left = `${position.left}px`; element.style.top = `${position.top}px`; element.style.visibility = 'visible';
     setMenuPosition({ ...position, orientation });
     if (menu.origin === 'keyboard') element.querySelector<HTMLButtonElement>('button')?.focus({ preventScroll: true });
-  }, [menu, scrollRoot]);
+  }, [menu, visibleMenu, scrollRoot]);
 
   useEffect(() => {
     if (!scrollRoot) return;
@@ -1467,10 +1471,10 @@ function PdfReaderInstance({ instance, contentKey, data, fileName, sessionId, wo
       {linkPreview && <div ref={linkPreviewRef} className="pr-link-preview" role="tooltip" style={{ visibility: 'hidden' }}><strong>{linkPreview.title}</strong><p>{linkPreview.text}</p></div>}
       {menu?.mode === 'figure' && menu.highlights?.map((rect, index) => <div key={`${menu.key}:${index}`} className="pr-figure-highlight" style={rect} aria-hidden="true" />)}
       {menu?.mode === 'hover' && <div className="pr-paragraph-outline pr-hover-highlight" style={{ left: menu.anchor.left - 3, top: menu.anchor.top - 2, width: menu.anchor.width + 6, height: menu.anchor.height + 4 }} aria-hidden="true" />}
-      {menu && <div ref={menuElementRef} className="pr-selection-menu" data-placement={menuPosition?.placement} data-orientation={menuPosition?.orientation ?? (menu.mode === 'hover' ? 'vertical' : 'horizontal')} role="toolbar" aria-label={menu.mode === 'figure' ? '图表操作' : menu.mode === 'hover' ? '悬停段落的操作' : '选中文字的操作'} aria-orientation={menuPosition?.orientation === 'vertical' ? 'vertical' : 'horizontal'} style={{ left: menuPosition?.left || 0, top: menuPosition?.top || 0, visibility: menuPosition ? 'visible' : 'hidden' }} onMouseDown={(event) => event.preventDefault()}>
-        <button type="button" onClick={() => dispatch("explain")}>解释</button>
-        {menu.mode !== 'figure' && <><button type="button" onClick={() => dispatch("translate")}>翻译</button><button type="button" onClick={() => dispatch("ask")}>提问</button></>}
-        <button type="button" onClick={() => dispatch("copy")}>复制</button>
+      {visibleMenu && <div ref={menuElementRef} className="pr-selection-menu" data-closing={menuPresence.closing ? '' : undefined} aria-hidden={menuPresence.closing || undefined} data-placement={menuPosition?.placement} data-orientation={menuPosition?.orientation ?? (visibleMenu.mode === 'hover' ? 'vertical' : 'horizontal')} role="toolbar" aria-label={visibleMenu.mode === 'figure' ? '图表操作' : visibleMenu.mode === 'hover' ? '悬停段落的操作' : '选中文字的操作'} aria-orientation={menuPosition?.orientation === 'vertical' ? 'vertical' : 'horizontal'} style={{ left: menuPosition?.left || 0, top: menuPosition?.top || 0, visibility: menuPosition ? 'visible' : 'hidden' }} onMouseDown={(event) => event.preventDefault()}>
+        <button type="button" disabled={menuPresence.closing} onClick={() => dispatch("explain")}>解释</button>
+        {visibleMenu.mode !== 'figure' && <><button type="button" disabled={menuPresence.closing} onClick={() => dispatch("translate")}>翻译</button><button type="button" disabled={menuPresence.closing} onClick={() => dispatch("ask")}>提问</button></>}
+        <button type="button" disabled={menuPresence.closing} onClick={() => dispatch("copy")}>复制</button>
       </div>}
     </div>
   );
