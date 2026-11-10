@@ -63,6 +63,8 @@ function ReaderShell({ data, fileName, sessionId, stateKey }: { data: Uint8Array
   const activeSend = useRef<AbortController | null>(null)
   const [notice, setNotice] = useState('')
   const [statusMessage, setStatusMessage] = useState('')
+  const [statusKind, setStatusKind] = useState<'progress' | 'success' | 'message'>('message')
+  const [statusVersion, setStatusVersion] = useState(0)
   const statusTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined)
   const lifetime = useRef(0)
   const clearStatusTimer = useCallback(() => {
@@ -93,6 +95,8 @@ function ReaderShell({ data, fileName, sessionId, stateKey }: { data: Uint8Array
       '正在添加内联选段引用…': '正在添加引用…',
     }
     setStatusMessage(compact[message] || message)
+    setStatusKind(transient ? 'success' : 'progress')
+    setStatusVersion(version => version + 1)
     if (transient) statusTimer.current = setTimeout(() => { statusTimer.current = undefined; setStatusMessage('') }, 2000)
   }, [clearStatusTimer])
   const showError = useCallback((message: string) => {
@@ -191,8 +195,8 @@ function ReaderShell({ data, fileName, sessionId, stateKey }: { data: Uint8Array
     else showError('暂时无法插入草稿。请确认当前会话的输入框可用后重试。')
   }, [fileName, sessionId, showError, showStatus])
   return <div className="pr-shell" onPointerDownCapture={event => { event.currentTarget.dataset.inputMethod = 'pointer' }} onKeyDownCapture={event => { event.currentTarget.dataset.inputMethod = 'keyboard' }}>
-    <PdfReader data={data} fileName={fileName} sessionId={sessionId} stateKey={stateKey} workerSrc={workerURL} onAction={act} statusMessage={statusMessage} onGenerateNotes={generateNotes}/>
-    {notice && <div className="pr-notice" role="status"><span>{notice}</span>
+    <PdfReader data={data} fileName={fileName} sessionId={sessionId} stateKey={stateKey} workerSrc={workerURL} onAction={act} statusMessage={statusMessage} statusKind={statusKind} statusVersion={statusVersion} onGenerateNotes={generateNotes}/>
+    {notice && <div className="pr-notice" role="alert"><span>{notice}</span>
       {pending && <><button type="button" onClick={() => { const result = retryDraftInsertion(pending, bindings.get(sessionId)); if (result.status === 'inserted') { setPending(null); showStatus('已插入当前会话草稿，请检查后发送。') } else showError('草稿仍不可用，选段已保留。') }}><ReaderIcon name="retry"/>重试</button><button type="button" onClick={() => {
         const generation = lifetime.current
         void copyDraftRequest(pending, navigator.clipboard?.writeText?.bind(navigator.clipboard)).then(result => {

@@ -39,6 +39,8 @@ export interface PdfReaderProps {
   stateKey?: string;
   /** Short-lived UI feedback; does not change the PDF or draft. */
   statusMessage?: string;
+  statusKind?: 'progress' | 'success' | 'message';
+  statusVersion?: number;
   /** Generate and export the accumulated reading notes for this paper. */
   onGenerateNotes?: () => void;
 }
@@ -593,7 +595,7 @@ export function PdfReader(props: PdfReaderProps) {
   return <PdfReaderInstance key={instance} instance={instance} contentKey={contentKey} {...props} />;
 }
 
-function PdfReaderInstance({ instance, contentKey, data, fileName, sessionId, workerSrc, onAction, enableTextLayer = true, stateKey, statusMessage, onGenerateNotes }: PdfReaderProps & { instance: number; contentKey: string }) {
+function PdfReaderInstance({ instance, contentKey, data, fileName, sessionId, workerSrc, onAction, enableTextLayer = true, stateKey, statusMessage, statusKind = 'message', statusVersion = 0, onGenerateNotes }: PdfReaderProps & { instance: number; contentKey: string }) {
   // Same tab: in-memory state; otherwise the last position saved for these bytes.
   const initialView = useRef<SavedView>((stateKey !== undefined && readerStates.get(stateKey)) || loadView(contentKey) || { page: 1, scale: 1, fit: true });
   const viewRef = useRef<SavedView>({ ...initialView.current });
@@ -1407,16 +1409,21 @@ function PdfReaderInstance({ instance, contentKey, data, fileName, sessionId, wo
   };
 
   const zoomPercent = Math.round(scale * 100);
+  const feedback = preparingVisible ? preparingLabel : statusMessage || localStatus;
+  const feedbackKind = preparingVisible ? 'progress' : statusMessage ? statusKind : 'message';
   return (
     <div className="pr-reader" ref={rootRef} onKeyDown={onKeyDown} onPointerDownCapture={event => { event.currentTarget.dataset.inputMethod = 'pointer'; }} data-session-id={sessionId} data-night={prefs.night ? '' : undefined}>
       <div className="pr-toolbar" role="toolbar" aria-label="PDF 阅读工具">
         <div className="pr-title-row">
           <ReaderIcon name="document" />
           <span className="pr-filename" title={fileName}>{fileName}</span>
-          {(preparingVisible || statusMessage || localStatus) && <span className="pr-toolbar-status" data-kind={preparingVisible ? 'progress' : 'message'} role="status" title={preparingVisible ? preparingLabel : statusMessage || localStatus}>
-            {preparingVisible && <span className="pr-spinner" aria-hidden="true" />}
-            <span>{preparingVisible ? preparingLabel : statusMessage || localStatus}</span>
-          </span>}
+          <span className="pr-toolbar-status" data-kind={feedbackKind} data-empty={!feedback ? '' : undefined} role="status" aria-atomic="true" title={feedback || undefined}>
+            {feedback && <React.Fragment key={`${feedbackKind}:${statusVersion}`}>
+              {feedbackKind === 'progress' && <span className="pr-spinner" aria-hidden="true" />}
+              {feedbackKind === 'success' && <ReaderIcon name="check" className="pr-status-icon" size={14} />}
+              <span>{feedback}</span>
+            </React.Fragment>}
+          </span>
           <div className="pr-tool-group">
             <button type="button" className="pr-tool" aria-label="搜索" title="搜索（Ctrl+F）" aria-pressed={searchOpen} disabled={!pdf} onClick={() => searchOpen ? closeSearch() : setSearchOpen(true)}><ReaderIcon name="search" /></button>
             {outline.length > 0 && <button type="button" className="pr-tool" data-panel-toggle aria-label="目录" title="目录" aria-haspopup="menu" aria-expanded={panel === 'outline'} onClick={() => setPanel(current => current === 'outline' ? null : 'outline')}><ReaderIcon name="outline" /></button>}

@@ -74,6 +74,9 @@
 .pr-filename { flex: 1 1 80px; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 13px; line-height: 20px; font-weight: 500; }
 .pr-toolbar-status, .pr-capture-status { display: inline-flex; align-items: center; gap: 4px; flex: 0 1 180px; min-width: 0; max-width: 40%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--pr-muted); font-size: 12px; line-height: 18px; opacity: 1; transition: opacity 100ms ease; }
 .pr-toolbar-status > span { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+.pr-toolbar-status { flex: 0 1 116px; width: 116px; max-width: 32%; min-height: 18px; }
+.pr-toolbar-status[data-kind="success"] { color: var(--pr-accent); }
+.pr-toolbar-status[data-empty] { visibility: hidden; }
 .pr-toolbar-status[data-kind="progress"] { transition: none; }
 .pr-controls { display: flex; flex: none; align-items: center; gap: 8px; min-width: 0; font-variant-numeric: tabular-nums; }
 .pr-control-group { display: flex; flex: none; align-items: center; gap: 2px; }
@@ -255,8 +258,10 @@
 .pr-status-icon {
   width: 14px;
   height: 14px;
-  animation: check-pop 300ms cubic-bezier(0.23, 1, 0.32, 1);
+  animation: check-pop 180ms ease-out;
 }
+.pr-status-icon path { stroke-dasharray: 22; stroke-dashoffset: 0; animation: pr-check-draw 180ms ease-out; }
+@keyframes pr-check-draw { from { stroke-dashoffset: 22; } to { stroke-dashoffset: 0; } }
 
 @keyframes success-flash {
   0% {
@@ -269,11 +274,8 @@
 
 @keyframes check-pop {
   0% {
-    transform: scale(0);
+    transform: scale(0.85);
     opacity: 0;
-  }
-  50% {
-    transform: scale(1.2);
   }
   100% {
     transform: scale(1);
@@ -321,7 +323,8 @@
 /* Reduced motion for new animations */
 @media (prefers-reduced-motion: reduce) {
   .pr-status-success,
-  .pr-status-icon {
+  .pr-status-icon,
+  .pr-status-icon path {
     animation: none;
   }
   .pr-page {
