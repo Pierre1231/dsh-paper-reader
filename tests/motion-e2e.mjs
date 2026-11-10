@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import { spawn } from 'node:child_process'
-import { mkdtemp, writeFile, rm } from 'node:fs/promises'
+import { mkdtemp, mkdir, writeFile, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import path from 'node:path'
 import { chromium } from 'playwright-core'
@@ -123,6 +123,33 @@ try {
   await loadingPage.locator('[data-pdf-page="1"][data-canvas-status="ready"]').waitFor()
   assert.equal(await loadingPage.locator('[data-pdf-page="1"][data-first-reveal]').count(), 0)
   await loadingPage.close()
+  await page.emulateMedia({ colorScheme: 'dark' })
+  await page.evaluate(() => {
+    const shell = document.querySelector('.pr-shell')
+    shell.style.setProperty('--dsw-alias-bg-base', '#fbfaf7')
+    shell.style.setProperty('--dsw-alias-label-primary', '#22222f')
+  })
+  await select()
+  assert.equal(await page.locator('.pr-toolbar').evaluate(node => getComputedStyle(node).backgroundColor), 'rgb(251, 250, 247)')
+  assert.match(await page.locator('.pr-selection-menu').evaluate(node => getComputedStyle(node).backgroundImage), /rgb\(251, 250, 247\)/)
+  assert.equal(await page.locator('.pr-selection-menu').evaluate(node => getComputedStyle(node).color), 'rgb(34, 34, 47)')
+  await mkdir('test-results/motion', { recursive: true })
+  await page.locator('.pr-shell').screenshot({ path: 'test-results/motion/host-light-system-dark.png' })
+  await page.evaluate(() => { const shell = document.querySelector('.pr-shell'); shell.style.setProperty('--dsw-alias-bg-base', '#1f2937'); shell.style.setProperty('--dsw-alias-label-primary', '#e6edf3') })
+  await page.emulateMedia({ colorScheme: 'light' })
+  assert.match(await page.locator('.pr-selection-menu').evaluate(node => getComputedStyle(node).backgroundImage), /rgb\(31, 41, 55\)/)
+  await page.locator('.pr-shell').screenshot({ path: 'test-results/motion/host-dark-system-light.png' })
+  for (const width of [320, 480, 640, 900]) {
+    await page.evaluate(width => { document.querySelector('#app').style.width = `${width}px` }, width)
+    await page.evaluate(() => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve))))
+    const layout = await page.locator('.pr-toolbar').evaluate(node => {
+      const bounds = node.getBoundingClientRect()
+      return { titleWidth: node.querySelector('.pr-filename').getBoundingClientRect().width,
+        overflow: [...node.querySelectorAll('button,input')].some(control => { const rect = control.getBoundingClientRect(); return rect.left < bounds.left - 1 || rect.right > bounds.right + 1 }) }
+    })
+    assert.ok(layout.titleWidth >= 40, `title remains readable at ${width}px`)
+    assert.equal(layout.overflow, false, `toolbar fits ${width}px`)
+  }
   await page.evaluate(() => { window.testHarness.conversation.failNextSend = 1 })
   await select()
   await page.locator('.pr-selection-menu button').filter({ hasText: '解释' }).click()
@@ -130,7 +157,7 @@ try {
   await page.getByRole('button', { name: '重试发送', exact: true }).click()
   await page.waitForFunction(() => document.querySelector('.pr-toolbar-status[data-kind="success"]')?.textContent === '已发送')
   assert.deepEqual(errors, [])
-  console.log('PASS: menus, hover, feedback, delayed skeleton, preserved zoom bitmap, one-time reveal')
+  console.log('PASS: menus, feedback, loading, zoom, mismatched host/system themes, 320–900px toolbar')
 } finally {
   await browser?.close()
   server.kill()

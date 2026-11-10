@@ -10,7 +10,7 @@ import { readFile } from 'node:fs/promises';
 
 const cssContent = await readFile(new URL('../src/pdf-reader.css', import.meta.url), 'utf8');
 
-test('menu uses fallback menu color variable', () => {
+test('menu follows the host surface over an opaque fallback', () => {
   assert.ok(
     cssContent.includes('--pr-fallback-menu'),
     'CSS should define --pr-fallback-menu variable'
@@ -18,9 +18,9 @@ test('menu uses fallback menu color variable', () => {
   
   // Check that --pr-menu uses --pr-fallback-menu (not the host variable)
   assert.ok(
-    cssContent.includes('--pr-menu: var(--pr-fallback-menu)') ||
-    cssContent.includes('--pr-menu: var(--dsw-specific-menu, var(--pr-fallback-menu))'),
-    '--pr-menu should use --pr-fallback-menu'
+    cssContent.includes('--pr-menu: var(--pr-surface)') &&
+    cssContent.includes('linear-gradient(var(--pr-menu), var(--pr-menu)), var(--pr-fallback-menu)'),
+    'Host surface must be composited over an opaque fallback'
   );
 });
 

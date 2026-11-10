@@ -15,8 +15,10 @@
   --pr-accent: var(--dsw-alias-state-business-primary, var(--pr-fallback-accent));
   /* The PDF paper stays white in either UI theme; marks need a stable contrast. */
   --pr-pdf-mark: #2563EB;
-  /* Menu must be fully opaque for readability over PDF content */
-  --pr-menu: var(--pr-fallback-menu);
+  --pr-menu: var(--pr-surface);
+  --pr-radius-control: 6px;
+  --pr-radius-overlay: 10px;
+  --pr-shadow-overlay: 0 8px 24px rgb(0 0 0 / 14%), 0 2px 6px rgb(0 0 0 / 8%);
   --pr-font: var(--dsw-font-family, system-ui, -apple-system, "Segoe UI", sans-serif);
   --pr-hover: color-mix(in srgb, var(--pr-ink) 6%, transparent);
   --pr-pressed: color-mix(in srgb, var(--pr-ink) 10%, transparent);
@@ -87,6 +89,8 @@
 /* Same type scale as the other toolbar controls (a bare `button` rule used to inherit 14–16px). */
 .pr-toolbar .pr-notes-entry { display: inline-flex; flex: none; align-items: center; gap: 4px; height: 32px; min-height: 32px; padding: 0 8px; color: var(--pr-ink); font-size: 12px; line-height: 18px; font-weight: 500; }
 .pr-notes-entry-label { font-weight: 500; }
+.pr-toolbar .pr-notes-entry { border: 1px solid var(--pr-border); border-radius: var(--pr-radius-control); }
+.pr-tool-group { gap: 4px; }
 .pr-spinner { display: inline-block; flex: none; width: 12px; height: 12px; border: 1.5px solid currentColor; border-right-color: transparent; border-radius: 50%; animation: pr-spin 800ms linear infinite; }
 @keyframes pr-spin { to { transform: rotate(360deg); } }
 @media (prefers-reduced-motion: reduce) { .pr-spinner { animation: none; } }
@@ -164,6 +168,12 @@
 .pr-link-preview strong { display: block; margin-bottom: 4px; color: var(--pr-muted); font-size: 11px; font-weight: 500; line-height: 16px; }
 .pr-link-preview p { margin: 0; font-size: 13px; line-height: 19px; overflow-wrap: anywhere; }
 .pr-return-chip { position: absolute; left: 12px; bottom: 12px; z-index: 1050; display: inline-flex; align-items: center; gap: 6px; min-height: 32px; padding: 5px 12px 5px 10px; border: 1px solid var(--pr-border) !important; border-radius: 999px !important; color: var(--pr-ink); background: var(--pr-menu) !important; box-shadow: 0 6px 18px rgb(0 0 0 / 16%); font-size: 12px; line-height: 18px; }
+
+.pr-selection-menu, .pr-popover, .pr-link-preview, .pr-notice, .pr-return-chip {
+  border-radius: var(--pr-radius-overlay);
+  box-shadow: var(--pr-shadow-overlay);
+  background: linear-gradient(var(--pr-menu), var(--pr-menu)), var(--pr-fallback-menu) !important;
+}
 
 /* Night reading: invert the page (soft black, not #000); raster images are inverted back. */
 .pr-reader[data-night] .pr-page { background: #0f0f0f; box-shadow: 0 2px 12px rgb(0 0 0 / 45%); }
