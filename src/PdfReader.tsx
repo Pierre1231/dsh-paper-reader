@@ -148,10 +148,27 @@ const PdfPage = React.memo(function PdfPage({ doc, number, scale, textEnabled, i
   const [canvasStatus, setCanvasStatus] = useState<CanvasStatus>('empty');
   const [textStatus, setTextStatus] = useState<TextStatus>('none');
   const [canvasEpoch, setCanvasEpoch] = useState(0);
+  const [loadingVisible, setLoadingVisible] = useState(false);
+  const [firstReveal, setFirstReveal] = useState(false);
+  const hasRevealed = useRef(false);
   const [textEpoch, setTextEpoch] = useState(0);
   // Mutable facts read by the residency manager and the effects without re-rendering.
   const live = useRef({ near: false, fullScale: 0, fullBytes: 0, placeholderBytes: 0, textReady: false, scale });
   live.current.scale = scale;
+
+  useEffect(() => {
+    if (!inView || (canvasStatus !== 'empty' && canvasStatus !== 'loading')) { setLoadingVisible(false); return; }
+    const timer = setTimeout(() => setLoadingVisible(true), 200);
+    return () => clearTimeout(timer);
+  }, [inView, canvasStatus]);
+
+  useEffect(() => {
+    if (canvasStatus !== 'ready' || hasRevealed.current) { setFirstReveal(false); return; }
+    hasRevealed.current = true;
+    setFirstReveal(true);
+    const timer = setTimeout(() => setFirstReveal(false), 160);
+    return () => clearTimeout(timer);
+  }, [canvasStatus]);
 
   const priority = useCallback(() => {
     const host = hostRef.current;
@@ -242,7 +259,7 @@ const PdfPage = React.memo(function PdfPage({ doc, number, scale, textEnabled, i
     let cancelled = false;
     let renderTask: ReturnType<PDFPageProxy["render"]> | undefined;
     let cancelQueued: (() => void) | undefined;
-    const hasBitmap = canvas.width > 0 && canvas.height > 0;
+    const hasBitmap = live.current.fullBytes > 0 || live.current.placeholderBytes > 0;
     // Keep the current picture (placeholder or previous zoom) until the new one is complete.
     const target = hasBitmap ? document.createElement('canvas') : canvas;
     setCanvasStatus(hasBitmap ? 'stale' : 'loading');
@@ -423,6 +440,7 @@ const PdfPage = React.memo(function PdfPage({ doc, number, scale, textEnabled, i
       data-pdf-page={number}
       data-render-status={renderStatus}
       data-canvas-status={canvasStatus}
+      data-first-reveal={firstReveal ? '' : undefined}
       data-text-status={textStatus}
       aria-busy={canvasStatus === 'loading'}
       aria-label={`第 ${number} 页`}
@@ -444,7 +462,10 @@ const PdfPage = React.memo(function PdfPage({ doc, number, scale, textEnabled, i
           onPointerEnter={event => onLink(link, 'enter', event.currentTarget)}
           onPointerLeave={event => onLink(link, 'leave', event.currentTarget)} />)}
       </div>}
-      {(canvasStatus === "empty" || canvasStatus === "loading") && <span className="pr-page-status">正在加载第 {number} 页…</span>}
+      {loadingVisible && (canvasStatus === 'empty' || canvasStatus === 'loading') && <>
+        <div className="pr-page-skeleton" aria-hidden="true">{[72, 100, 96, 100, 85, 100, 91].map((width, index) => <div key={index} className="pr-skeleton-line" style={{ width: `${width}%` }} />)}</div>
+        <span className="pr-page-status" role="status">正在加载第 {number} 页…</span>
+      </>}
       {canvasStatus === "error" && <span className="pr-page-status pr-page-error" role="alert">第 {number} 页加载失败</span>}
       {textStatus === "empty" && canvasStatus === 'ready' && <span className="pr-no-text">此页没有可选文字</span>}
     </div>

@@ -92,6 +92,37 @@ try {
   await page.locator('.pr-selection-menu button').filter({ hasText: '解释' }).click()
   await page.locator('.pr-toolbar-status[data-kind="progress"] .pr-spinner').waitFor()
   await page.waitForFunction(() => document.querySelector('.pr-toolbar-status[data-kind="success"]')?.textContent === '已发送')
+  const loadingPage = await browser.newPage()
+  await loadingPage.addInitScript(() => {
+    const original = window.requestAnimationFrame.bind(window)
+    const cancel = window.cancelAnimationFrame.bind(window)
+    let paused = true
+    let sequence = 0
+    const pending = new Map()
+    window.requestAnimationFrame = callback => {
+      if (!paused) return original(callback)
+      const identifier = --sequence
+      pending.set(identifier, callback)
+      return identifier
+    }
+    window.cancelAnimationFrame = identifier => identifier < 0 ? pending.delete(identifier) : cancel(identifier)
+    window.pauseReaderFrames = () => { paused = true }
+    window.releaseReaderFrames = () => { paused = false; for (const callback of pending.values()) original(callback); pending.clear() }
+  })
+  await loadingPage.goto(url)
+  await loadingPage.waitForFunction(() => !!document.querySelector('.pr-page-skeleton'), { }, { polling: 50 })
+  assert.equal(await loadingPage.locator('.pr-page[data-canvas-status="loading"]').first().evaluate(node => getComputedStyle(node).opacity), '1')
+  await loadingPage.evaluate(() => window.releaseReaderFrames())
+  await loadingPage.locator('[data-pdf-page="1"][data-canvas-status="ready"]').waitFor()
+  assert.equal(await loadingPage.locator('[data-pdf-page="1"] .pr-page-skeleton').count(), 0)
+  await loadingPage.evaluate(() => { window.pauseReaderFrames(); document.querySelector('button[aria-label="放大"]').click() })
+  await loadingPage.waitForFunction(() => document.querySelector('[data-pdf-page="1"]')?.dataset.canvasStatus === 'stale', {}, { polling: 50 })
+  assert.equal(await loadingPage.locator('[data-pdf-page="1"] .pr-page-skeleton').count(), 0)
+  assert.equal(await loadingPage.locator('[data-pdf-page="1"] canvas').evaluate(node => node.width > 0 && getComputedStyle(node.parentElement).opacity === '1'), true)
+  await loadingPage.evaluate(() => window.releaseReaderFrames())
+  await loadingPage.locator('[data-pdf-page="1"][data-canvas-status="ready"]').waitFor()
+  assert.equal(await loadingPage.locator('[data-pdf-page="1"][data-first-reveal]').count(), 0)
+  await loadingPage.close()
   await page.evaluate(() => { window.testHarness.conversation.failNextSend = 1 })
   await select()
   await page.locator('.pr-selection-menu button').filter({ hasText: '解释' }).click()
@@ -99,7 +130,7 @@ try {
   await page.getByRole('button', { name: '重试发送', exact: true }).click()
   await page.waitForFunction(() => document.querySelector('.pr-toolbar-status[data-kind="success"]')?.textContent === '已发送')
   assert.deepEqual(errors, [])
-  console.log('PASS: menus, hover, focus, reduced motion, feedback states, stable title, failed-send retry')
+  console.log('PASS: menus, hover, feedback, delayed skeleton, preserved zoom bitmap, one-time reveal')
 } finally {
   await browser?.close()
   server.kill()
