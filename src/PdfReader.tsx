@@ -61,6 +61,23 @@ const MAX_CANVAS_PIXELS = 1 << 24;
 const PLACEHOLDER_DIVISOR = 4;
 const FIGURE_CAPTION = /^\s*(Figure|Fig\.?|Table)\s+(\d+|[IVXLC]+)\b/i;
 
+type PageHighlight = {
+  mode: 'hover' | 'figure';
+  rect: OverlayRect;
+};
+
+function pageHighlight(element: HTMLElement, anchor: OverlayRect, mode: PageHighlight['mode']): PageHighlight {
+  const bounds = element.getBoundingClientRect();
+  const padX = mode === 'hover' ? 3 : 0;
+  const padY = mode === 'hover' ? 2 : 0;
+  return { mode, rect: {
+    left: anchor.left - bounds.left - padX,
+    top: anchor.top - bounds.top - padY,
+    width: anchor.width + padX * 2,
+    height: anchor.height + padY * 2,
+  } };
+}
+
 type MenuState = {
   quote: PdfQuote;
   anchor: OverlayRect;
@@ -70,7 +87,7 @@ type MenuState = {
   capture?: CaptureJob;
   returnFocus?: HTMLElement | null;
   imageReady?: Promise<Blob | undefined>;
-  highlights?: Array<{ left: number; top: number; width: number; height: number }>;
+  highlight?: PageHighlight;
   /** A hover paragraph that contains a display formula. */
   math?: boolean;
 };
@@ -90,6 +107,7 @@ type TextStatus = 'none' | 'loading' | 'ready' | 'empty' | 'error';
 type PageSearchRect = SearchRect & { active: boolean };
 export type LinkEvent = 'activate' | 'enter' | 'leave';
 type PageProps = {
+  highlight?: PageHighlight;
   locationCue?: { top: number; version: number };
   doc: PdfHandle;
   searchRects?: PageSearchRect[];
@@ -135,7 +153,7 @@ function selectionCovers(element: Element): boolean {
   return false;
 }
 
-const PdfPage = React.memo(function PdfPage({ doc, number, scale, textEnabled, initialSize, scrollRoot, renderQueue, textScheduler, residency, searchRects, onLink, locationCue }: PageProps) {
+const PdfPage = React.memo(function PdfPage({ doc, number, scale, textEnabled, initialSize, scrollRoot, renderQueue, textScheduler, residency, searchRects, onLink, locationCue, highlight }: PageProps) {
   const hostRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const textRef = useRef<HTMLDivElement>(null);
@@ -436,6 +454,7 @@ const PdfPage = React.memo(function PdfPage({ doc, number, scale, textEnabled, i
     >
       <canvas ref={canvasRef} aria-label={`第 ${number} 页的内容`} />
       <div ref={textRef} className="pr-text-layer notranslate" translate="no" />
+      {highlight && <div key={highlight.mode} className={highlight.mode === 'figure' ? 'pr-figure-highlight' : 'pr-paragraph-outline pr-hover-highlight'} style={highlight.rect} aria-hidden="true" />}
       {locationCue && <div key={locationCue.version} className="pr-location-cue" style={{ '--pr-location-top': `${locationCue.top}%` } as React.CSSProperties} aria-hidden="true" />}
       {!!searchRects?.length && <div className="pr-search-layer" aria-hidden="true">
         {searchRects.map((rect, index) => <div key={index} className={rect.active ? 'pr-search-hit pr-search-active' : 'pr-search-hit'} style={{ left: `${rect.left}%`, top: `${rect.top}%`, width: `${rect.width}%`, height: `${rect.height}%` }} />)}
@@ -720,7 +739,7 @@ function PdfReaderInstance({ instance, contentKey, data, fileName, sessionId, wo
     setMenu({ mode: 'figure', key: figure.key, anchor: figure.rect, origin, returnFocus,
       capture, imageReady: capture?.promise,
       quote: { kind: 'figure', text: figure.caption, pageStart: figure.pageNumber, pageEnd: figure.pageNumber },
-      highlights: [{ ...figure.rect }] });
+      highlight: pageHighlight(element, figure.rect, 'figure') });
   }, [getCapture]);
 
   useEffect(() => {
@@ -1271,11 +1290,12 @@ function PdfReaderInstance({ instance, contentKey, data, fileName, sessionId, wo
         const right = Math.max(...paragraph.rects.map(rect => rect.right));
         const top = Math.min(...paragraph.rects.map(rect => rect.top));
         const bottom = Math.max(...paragraph.rects.map(rect => rect.bottom));
+        const anchor = { left, top, width: right - left, height: bottom - top };
         setMenu({
           mode: 'hover', key: paragraph.key, origin: 'pointer', math: paragraph.math,
           quote: { text: paragraph.text, pageStart: page, pageEnd: page },
-          anchor: { left, top, width: right - left, height: bottom - top },
-          highlights: paragraph.rects.map(rect => ({ left: rect.left, top: rect.top, width: rect.width, height: rect.height })),
+          anchor,
+          highlight: pageHighlight(pageElement, anchor, 'hover'),
         });
       });
     };
@@ -1487,13 +1507,11 @@ function PdfReaderInstance({ instance, contentKey, data, fileName, sessionId, wo
       </div>}
       <div className="pr-scroll" ref={setScrollRoot} tabIndex={0} aria-label="PDF 页面，使用左右方向键切换页面，加减号缩放">
         {error ? <div className="pr-message" role="alert">无法打开 PDF：{error}</div> : !pdf ? <div className="pr-message" role="status">正在打开 PDF…</div> : (
-          <div className="pr-pages">{Array.from({ length: pdf.numPages }, (_, index) => <PdfPage key={index + 1} doc={doc!} number={index + 1} scale={scale} textEnabled={enableTextLayer} initialSize={initialSize} scrollRoot={scrollRoot} renderQueue={renderQueue} textScheduler={textScheduler} residency={residency} searchRects={searchByPage.get(index + 1)} onLink={onLink} locationCue={navigationCue?.page === index + 1 ? navigationCue : undefined} />)}</div>
+          <div className="pr-pages">{Array.from({ length: pdf.numPages }, (_, index) => <PdfPage key={index + 1} doc={doc!} number={index + 1} scale={scale} textEnabled={enableTextLayer} initialSize={initialSize} scrollRoot={scrollRoot} renderQueue={renderQueue} textScheduler={textScheduler} residency={residency} searchRects={searchByPage.get(index + 1)} onLink={onLink} locationCue={navigationCue?.page === index + 1 ? navigationCue : undefined} highlight={menu?.quote.pageStart === index + 1 ? menu.highlight : undefined} />)}</div>
         )}
       </div>
       {returnPoint && <button type="button" className="pr-return-chip" onClick={() => { const point = returnPoint; setReturnPoint(null); goToDestination(point); }}><ReaderIcon name="back" />返回第 {returnPoint.page} 页</button>}
       {linkPreview && <div ref={linkPreviewRef} className="pr-link-preview" role="tooltip" style={{ visibility: 'hidden' }}><strong>{linkPreview.title}</strong><p>{linkPreview.text}</p></div>}
-      {menu?.mode === 'figure' && menu.highlights?.map((rect, index) => <div key={`${menu.key}:${index}`} className="pr-figure-highlight" style={rect} aria-hidden="true" />)}
-      {menu?.mode === 'hover' && <div className="pr-paragraph-outline pr-hover-highlight" style={{ left: menu.anchor.left - 3, top: menu.anchor.top - 2, width: menu.anchor.width + 6, height: menu.anchor.height + 4 }} aria-hidden="true" />}
       {visibleMenu && <div ref={menuElementRef} className="pr-selection-menu" data-closing={menuPresence.closing ? '' : undefined} aria-hidden={menuPresence.closing || undefined} data-placement={menuPosition?.placement} data-orientation={menuPosition?.orientation ?? (visibleMenu.mode === 'hover' ? 'vertical' : 'horizontal')} role="toolbar" aria-label={visibleMenu.mode === 'figure' ? '图表操作' : visibleMenu.mode === 'hover' ? '悬停段落的操作' : '选中文字的操作'} aria-orientation={menuPosition?.orientation === 'vertical' ? 'vertical' : 'horizontal'} style={{ left: menuPosition?.left || 0, top: menuPosition?.top || 0, visibility: menuPosition ? 'visible' : 'hidden' }} onMouseDown={(event) => event.preventDefault()}>
         <button type="button" disabled={menuPresence.closing} onClick={() => dispatch("explain")}>解释</button>
         {visibleMenu.mode !== 'figure' && <><button type="button" disabled={menuPresence.closing} onClick={() => dispatch("translate")}>翻译</button><button type="button" disabled={menuPresence.closing} onClick={() => dispatch("ask")}>提问</button></>}

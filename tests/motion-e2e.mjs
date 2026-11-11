@@ -118,6 +118,24 @@ try {
   assert.equal(await page.locator('.pr-selection-menu:not([data-closing])').count(), 1)
   await page.evaluate(() => { document.activeElement.blur(); document.querySelector('.pr-reader').dispatchEvent(new PointerEvent('pointerleave')) })
   await page.locator('.pr-selection-menu').waitFor({ state: 'detached', timeout: 1200 })
+  await paragraph.hover()
+  await highlight.waitFor()
+  const scrollMovement = await paragraph.evaluate(node => {
+    const scroll = document.querySelector('.pr-scroll')
+    const frame = document.querySelector('.pr-hover-highlight')
+    const paragraphTop = node.getBoundingClientRect().top
+    const highlightTop = frame.getBoundingClientRect().top
+    scroll.scrollTop += 48
+    return {
+      paragraph: node.getBoundingClientRect().top - paragraphTop,
+      highlight: frame.getBoundingClientRect().top - highlightTop
+    }
+  })
+  assert.ok(scrollMovement.paragraph < -40, 'the PDF scrolled before the scroll handler could run')
+  assert.ok(Math.abs(scrollMovement.highlight - scrollMovement.paragraph) < 1,
+    `highlight moves with the PDF before scroll cleanup: paragraph ${scrollMovement.paragraph}px, highlight ${scrollMovement.highlight}px`)
+  await highlight.waitFor({ state: 'detached' })
+  await page.mouse.move(8, 8)
   const filenameBefore = await page.locator('.pr-filename').boundingBox()
   await page.getByRole('button', { name: '生成阅读笔记', exact: true }).click()
   await page.waitForFunction(() => document.querySelector('.pr-toolbar-status[data-kind="success"]')?.textContent.includes('笔记指令已加入草稿'))
