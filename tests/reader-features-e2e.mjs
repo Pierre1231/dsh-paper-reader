@@ -1,6 +1,6 @@
 // v0.7 reading features, end to end in an isolated Chrome page:
 // fit width, ctrl-wheel zoom, remembered position, links + citation preview +
-// back, search, outline, night mode, hover toggle, margin hover menu, and
+// back, search, outline, original PDF colours, hover toggle, margin hover menu, and
 // formula screenshots / cleaned text sent to the conversation.
 //
 //   PAPER_TEST_PDF=/path/supermimic.pdf PAPER_FORMULA_PDF=/path/1706.03762.pdf node tests/reader-features-e2e.mjs
@@ -127,17 +127,11 @@ try {
   await page.waitForFunction(old => document.querySelector('.pr-page-input input').value !== String(old), startPage)
   report.outline = { from: startPage, to: Number(await pageInput()) }
 
-  // 6. Night mode inverts pages and keeps raster images in their real colours.
   await go(1)
-  await page.getByRole('button', { name: '显示设置' }).click()
-  await page.getByLabel('夜间阅读').check()
-  await page.locator('.pr-reader[data-night]').waitFor()
-  assert.match(await page.locator('[data-pdf-page="1"] canvas').evaluate(node => getComputedStyle(node).filter), /invert/)
-  await page.locator('[data-pdf-page="1"] .pr-night-images > div').first().waitFor({ timeout: 10000 })
-  await page.locator('[data-pdf-page="1"]').screenshot({ path: 'test-results/visual/night-page.png' })
-  await page.getByLabel('夜间阅读').uncheck()
-  await page.keyboard.press('Escape')
-  report.nightMode = true
+  await page.emulateMedia({ colorScheme: 'dark' })
+  assert.equal(await page.locator('[data-pdf-page="1"] canvas').evaluate(node => getComputedStyle(node).filter), 'none')
+  await page.emulateMedia({ colorScheme: 'light' })
+  report.originalPdfColours = true
 
   // 7. Hover menu sits beside the paragraph (never over it); it can be switched off.
   await go(2)

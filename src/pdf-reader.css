@@ -181,13 +181,6 @@
   background: linear-gradient(var(--pr-menu), var(--pr-menu)), var(--pr-fallback-menu) !important;
 }
 
-/* Night reading: invert the page (soft black, not #000); raster images are inverted back. */
-.pr-reader[data-night] .pr-page { background: #0f0f0f; box-shadow: 0 2px 12px rgb(0 0 0 / 45%); }
-.pr-reader[data-night] .pr-page canvas { filter: invert(0.94) hue-rotate(180deg); }
-.pr-night-images { position: absolute; inset: 0; z-index: 0; pointer-events: none; }
-.pr-night-images > div { position: absolute; backdrop-filter: hue-rotate(180deg) invert(1) contrast(1.13636) brightness(0.86); }
-.pr-reader[data-night] .pr-search-hit { mix-blend-mode: screen; background: rgb(255 196 0 / 45%); }
-
 /* Menu animations */
 @keyframes menu-enter {
   from {

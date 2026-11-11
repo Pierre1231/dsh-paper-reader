@@ -45,11 +45,13 @@ test('reading positions persist per document and only the latest 60 are kept', (
   assert.ok([...store.keys()].filter(key => key.startsWith('dsh-paper-reader:view:')).length <= 60);
   store.set('dsh-paper-reader:view:bad', '{"page":0}');
   assert.equal(loadView('bad'), null, 'invalid entries are ignored');
-  savePrefs({ night: true, hoverMenu: false });
-  assert.deepEqual(loadPrefs(), { night: true, hoverMenu: false });
+  store.set('dsh-paper-reader:prefs', JSON.stringify({ night: true, hoverMenu: false }));
+  assert.deepEqual(loadPrefs(), { hoverMenu: false }, 'legacy night preference is ignored');
+  savePrefs({ hoverMenu: true });
+  assert.deepEqual(JSON.parse(store.get('dsh-paper-reader:prefs')), { hoverMenu: true });
   globalThis.localStorage = { getItem() { throw new Error('blocked'); }, setItem() { throw new Error('blocked'); }, removeItem() {} };
   assert.equal(loadView('doc-1'), null, 'blocked storage behaves like empty storage');
-  assert.deepEqual(loadPrefs(), { night: false, hoverMenu: true });
+  assert.deepEqual(loadPrefs(), { hoverMenu: true });
   delete globalThis.localStorage;
 });
 

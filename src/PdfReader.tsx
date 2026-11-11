@@ -9,7 +9,7 @@ import { createPdfRenderQueue, type PdfRenderQueue } from './renderQueue';
 import { createTaskScheduler, type TaskScheduler } from './taskScheduler';
 import { createTextLayerJob, hasSelectableText } from './textLayer';
 import { createResidency, type Residency } from './residency';
-import { openPdfDocument, type PdfHandle, type PdfImageRects, type PdfOutlineItem } from './documentStore';
+import { openPdfDocument, type PdfHandle, type PdfOutlineItem } from './documentStore';
 import { resolveDestination, previewTextAt, type PdfDestination, type PdfLink } from './links';
 import { searchIndex as searchPageIndex, normaliseQuery, type SearchHit, type SearchRect } from './search';
 import { fitWidthScale, loadPrefs, loadView, savePrefs, saveView, type ReaderPrefs, type SavedView } from './viewState';
@@ -92,7 +92,6 @@ export type LinkEvent = 'activate' | 'enter' | 'leave';
 type PageProps = {
   locationCue?: { top: number; version: number };
   doc: PdfHandle;
-  night: boolean;
   searchRects?: PageSearchRect[];
   onLink: (link: PdfLink, event: LinkEvent, element: HTMLElement) => void;
   number: number;
@@ -136,9 +135,7 @@ function selectionCovers(element: Element): boolean {
   return false;
 }
 
-const percent = (value: number, total: number) => `${(100 * value / total).toFixed(3)}%`;
-
-const PdfPage = React.memo(function PdfPage({ doc, number, scale, textEnabled, initialSize, scrollRoot, renderQueue, textScheduler, residency, night, searchRects, onLink, locationCue }: PageProps) {
+const PdfPage = React.memo(function PdfPage({ doc, number, scale, textEnabled, initialSize, scrollRoot, renderQueue, textScheduler, residency, searchRects, onLink, locationCue }: PageProps) {
   const hostRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const textRef = useRef<HTMLDivElement>(null);
@@ -415,16 +412,6 @@ const PdfPage = React.memo(function PdfPage({ doc, number, scale, textEnabled, i
     return () => { cancelled = true; };
   }, [doc, number, inView]);
 
-  // Night mode inverts the page; raster images are inverted back so photos
-  // and heat maps keep their real colours.
-  const [nightImages, setNightImages] = useState<PdfImageRects | null>(null);
-  useEffect(() => {
-    if (!night || !near) return;
-    let cancelled = false;
-    doc.imageRects(number).then(value => { if (!cancelled) setNightImages(value); }, () => {});
-    return () => { cancelled = true; };
-  }, [doc, number, night, near]);
-
   // Free bitmaps promptly when the document closes.
   useEffect(() => () => {
     const canvas = canvasRef.current;
@@ -448,9 +435,6 @@ const PdfPage = React.memo(function PdfPage({ doc, number, scale, textEnabled, i
       style={{ width: size.width * scale, height: size.height * scale, "--scale-factor": scale, "--total-scale-factor": scale } as React.CSSProperties}
     >
       <canvas ref={canvasRef} aria-label={`第 ${number} 页的内容`} />
-      {night && nightImages && nightImages.rects.length > 0 && canvasStatus !== 'empty' && canvasStatus !== 'loading' && <div className="pr-night-images" aria-hidden="true">
-        {nightImages.rects.map((rect, index) => <div key={index} style={{ left: percent(rect.left, nightImages.width), top: percent(rect.top, nightImages.height), width: percent(rect.width, nightImages.width), height: percent(rect.height, nightImages.height) }} />)}
-      </div>}
       <div ref={textRef} className="pr-text-layer notranslate" translate="no" />
       {locationCue && <div key={locationCue.version} className="pr-location-cue" style={{ '--pr-location-top': `${locationCue.top}%` } as React.CSSProperties} aria-hidden="true" />}
       {!!searchRects?.length && <div className="pr-search-layer" aria-hidden="true">
@@ -1446,7 +1430,7 @@ function PdfReaderInstance({ instance, contentKey, data, fileName, sessionId, wo
   const feedback = preparingVisible ? preparingLabel : statusMessage || localStatus;
   const feedbackKind = preparingVisible ? 'progress' : statusMessage ? statusKind : 'message';
   return (
-    <div className="pr-reader" ref={rootRef} onKeyDown={onKeyDown} onPointerDownCapture={event => { event.currentTarget.dataset.inputMethod = 'pointer'; }} data-session-id={sessionId} data-night={prefs.night ? '' : undefined}>
+    <div className="pr-reader" ref={rootRef} onKeyDown={onKeyDown} onPointerDownCapture={event => { event.currentTarget.dataset.inputMethod = 'pointer'; }} data-session-id={sessionId}>
       <div className="pr-toolbar" role="toolbar" aria-label="PDF 阅读工具">
         <div className="pr-title-row">
           <ReaderIcon name="document" />
@@ -1487,7 +1471,6 @@ function PdfReaderInstance({ instance, contentKey, data, fileName, sessionId, wo
           }}>{item.title}</button>)}
         </div>}
         {panel === 'display' && <div className="pr-popover pr-display" role="dialog" aria-label="显示设置">
-          <label className="pr-switch"><input type="checkbox" checked={prefs.night} onChange={event => setPrefs({ night: event.target.checked })} /><span>夜间阅读</span><small>页面反色，图片保持原色</small></label>
           <label className="pr-switch"><input type="checkbox" checked={prefs.hoverMenu} onChange={event => { setPrefs({ hoverMenu: event.target.checked }); setMenu(null); }} /><span>悬停显示操作</span><small>停在段落或图表上时出现解释、翻译等</small></label>
         </div>}
       </div>
@@ -1504,7 +1487,7 @@ function PdfReaderInstance({ instance, contentKey, data, fileName, sessionId, wo
       </div>}
       <div className="pr-scroll" ref={setScrollRoot} tabIndex={0} aria-label="PDF 页面，使用左右方向键切换页面，加减号缩放">
         {error ? <div className="pr-message" role="alert">无法打开 PDF：{error}</div> : !pdf ? <div className="pr-message" role="status">正在打开 PDF…</div> : (
-          <div className="pr-pages">{Array.from({ length: pdf.numPages }, (_, index) => <PdfPage key={index + 1} doc={doc!} number={index + 1} scale={scale} textEnabled={enableTextLayer} initialSize={initialSize} scrollRoot={scrollRoot} renderQueue={renderQueue} textScheduler={textScheduler} residency={residency} night={prefs.night} searchRects={searchByPage.get(index + 1)} onLink={onLink} locationCue={navigationCue?.page === index + 1 ? navigationCue : undefined} />)}</div>
+          <div className="pr-pages">{Array.from({ length: pdf.numPages }, (_, index) => <PdfPage key={index + 1} doc={doc!} number={index + 1} scale={scale} textEnabled={enableTextLayer} initialSize={initialSize} scrollRoot={scrollRoot} renderQueue={renderQueue} textScheduler={textScheduler} residency={residency} searchRects={searchByPage.get(index + 1)} onLink={onLink} locationCue={navigationCue?.page === index + 1 ? navigationCue : undefined} />)}</div>
         )}
       </div>
       {returnPoint && <button type="button" className="pr-return-chip" onClick={() => { const point = returnPoint; setReturnPoint(null); goToDestination(point); }}><ReaderIcon name="back" />返回第 {returnPoint.page} 页</button>}

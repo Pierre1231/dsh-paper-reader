@@ -18,10 +18,9 @@ const MAX_VIEWS = 60;
 const PREFS = 'dsh-paper-reader:prefs';
 
 export interface ReaderPrefs {
-  night: boolean;
   hoverMenu: boolean;
 }
-export const DEFAULT_PREFS: ReaderPrefs = { night: false, hoverMenu: true };
+export const DEFAULT_PREFS: ReaderPrefs = { hoverMenu: true };
 
 function storage(): Storage | null {
   try { return typeof localStorage === 'undefined' ? null : localStorage; } catch { return null; }
@@ -53,7 +52,7 @@ export function saveView(key: string, view: SavedView): void {
 export function loadPrefs(): ReaderPrefs {
   try {
     const value = JSON.parse(storage()?.getItem(PREFS) || '{}') as Partial<ReaderPrefs>;
-    return { night: value.night === true, hoverMenu: value.hoverMenu !== false };
+    return { hoverMenu: value.hoverMenu !== false };
   } catch { return { ...DEFAULT_PREFS }; }
 }
 export function savePrefs(prefs: ReaderPrefs): void {

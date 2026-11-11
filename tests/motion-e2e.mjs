@@ -39,11 +39,17 @@ try {
   })
   browser = await chromium.launch({ executablePath: process.env.CHROME_PATH || '/Applications/Microsoft Edge.app/Contents/MacOS/Microsoft Edge', headless: true })
   const page = await browser.newPage()
+  await page.addInitScript(() => localStorage.setItem('dsh-paper-reader:prefs', JSON.stringify({ night: true, hoverMenu: true })))
   const errors = []
   page.on('pageerror', error => errors.push(String(error)))
   await page.goto(url)
   const text = page.locator('[data-pdf-page="1"] .pr-text-layer span').filter({ hasText: 'Reading motion page 1' }).first()
   await text.waitFor()
+  await page.getByRole('button', { name: '显示设置', exact: true }).click()
+  const displaySettings = page.getByRole('dialog', { name: '显示设置' })
+  assert.equal(await displaySettings.getByRole('checkbox').count(), 1)
+  assert.equal(await displaySettings.getByRole('checkbox', { name: /悬停显示操作/ }).isChecked(), true)
+  await page.keyboard.press('Escape')
   const select = async () => {
     await text.evaluate(node => {
       const range = document.createRange()
@@ -155,6 +161,8 @@ try {
   assert.equal(await loadingPage.locator('[data-pdf-page="1"][data-first-reveal]').count(), 0)
   await loadingPage.close()
   await page.emulateMedia({ colorScheme: 'dark' })
+  assert.equal(await page.locator('[data-pdf-page="1"] canvas').evaluate(node => getComputedStyle(node).filter), 'none')
+  assert.equal(await page.locator('[data-pdf-page="1"]').evaluate(node => getComputedStyle(node).backgroundColor), 'rgb(255, 255, 255)')
   await page.evaluate(() => {
     const shell = document.querySelector('.pr-shell')
     shell.style.setProperty('--dsw-alias-bg-base', '#fbfaf7')
