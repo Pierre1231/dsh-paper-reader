@@ -241,6 +241,38 @@ test('separated rows without aligned math on both sides stay independent', () =>
   assert.equal(lines.length, 3);
 });
 
+test('a numbered equation joins both sides of a summation but not the surrounding paragraphs', () => {
+  const lines = [
+    fragment('The policy objective is', 185, 0, 378, 17, 18.5),
+    fragment('hHX−1', 434.5, 22.5, 40.2, 14, 19.7),
+    fragment('i', 726.3, 22.5, 3.8, 17, 17),
+    fragment('ˆ', 311.5, 37, 5.7, 17, 17),
+    fragment('J(θ) =Es0∼ρ0, πθ', 307.5, 41.3, 124.5, 13.5, 19.8),
+    fragment('γcˆt rˆt+1+γcˆH Vψ(ˆsH,gH,ξ).', 477.7, 41.3, 261.3, 15.5, 18.6),
+    fragment('(2)', 841.9, 41.3, 19.9, 17, 17),
+    fragment('t=0', 449, 65.3, 22.4, 11.9, 11.9),
+    fragment('For motion tracking, the reward is', 185, 80, 640, 17, 17),
+  ].map(piece => ({ ...piece, fragments: [piece] }));
+  const groups = groupPdfVisualLines(attachPdfScripts(lines));
+  const formula = groups.find(group => group[0].displayMath);
+  assert.equal(formula?.length, 1);
+  assert.deepEqual(formula[0].fragments, [lines[4], lines[3], lines[1], lines[7], lines[5], lines[2]].map(line => line.fragments[0]));
+  assert.equal(formula[0].rect.left, 307.5);
+  assert.ok(formula[0].rect.top + formula[0].rect.height >= 77.2);
+  for (const text of ['The policy objective is', '(2)', 'For motion tracking, the reward is']) {
+    assert.ok(groups.some(group => group.length === 1 && group[0].text === text));
+  }
+});
+
+test('a detached reference number does not turn prose with an inline relation into a display equation', () => {
+  const lines = attachPdfScripts(buildPdfVisualLines([
+    fragment('The estimated value = 2', 160, 100, 148),
+    fragment('(2)', 386, 100, 16),
+  ]));
+  assert.equal(lines.length, 2);
+  assert.ok(lines.every(line => !line.displayMath));
+});
+
 test('inline sub/superscripts stay in their prose line and do not break the paragraph', () => {
   const lines = attachPdfScripts(buildPdfVisualLines([
     fragment('values of d', 50, 0, 60, 10, 10),

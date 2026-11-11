@@ -71,6 +71,7 @@
     "test:perf": "node tests/scroll-perf.mjs",
     "test:parity": "node tests/textlayer-parity-e2e.mjs",
     "test:formula": "node tests/formula-selection-e2e.mjs",
+    "test:formula-hover": "node tests/formula-hover-e2e.mjs",
     "test:features": "node tests/reader-features-e2e.mjs",
     "test:scenarios": "node tests/host-scenarios.mjs",
     "test:stress": "node tests/host-stress.mjs"

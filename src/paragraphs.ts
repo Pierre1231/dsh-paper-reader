@@ -31,6 +31,7 @@ export interface PdfVisualLine {
   fragments: PdfTextFragment[];
   /** Set when sub/superscripts or fraction parts were attached (a formula). */
   math?: boolean;
+  displayMath?: boolean;
 }
 
 const right = (rect: PdfParagraphRect) => rect.left + rect.width;
@@ -154,6 +155,49 @@ function readingOrder(a: PdfTextFragment, b: PdfTextFragment): number {
   return a.rect.left - b.rect.left || a.rect.top - b.rect.top;
 }
 
+function mergeMathLines(lines: PdfVisualLine[], fontSize: number): PdfVisualLine {
+  const fragments = lines.flatMap(line => line.fragments).sort(readingOrder);
+  return { text: joinFragments(fragments), rect: unionRects(lines.map(line => line.rect)), fontSize, fragments, math: true };
+}
+
+const EQUATION_LABEL = /^\(\s*\d+(?:\.\d+)*[a-z]?\s*\)$/i;
+const PROSE_WORDS = /\b[A-Za-z]{3,}\s+[A-Za-z]{3,}\b/;
+const MATH_RELATION = /[=≈≠≤≥]/;
+
+function splitNumberedEquations(input: PdfVisualLine[]) {
+  const claimed = new Set<PdfVisualLine>();
+  const equations: PdfVisualLine[] = [];
+  for (const label of input) {
+    if (!EQUATION_LABEL.test(label.text)) continue;
+    const size = label.fontSize;
+    const available = input.filter(line => !claimed.has(line) && !EQUATION_LABEL.test(line.text) &&
+      !PROSE_WORDS.test(line.text) && right(line.rect) <= label.rect.left);
+    const aligned = available.filter(line => Math.abs(baselineOf(line) - baselineOf(label)) <= size * 0.35 &&
+      verticalOverlap(line.rect, label.rect) >= Math.min(line.rect.height, label.rect.height) * 0.6)
+      .sort((first, second) => right(second.rect) - right(first.rect));
+    const closest = aligned[0];
+    if (!closest) continue;
+    const labelGap = label.rect.left - right(closest.rect);
+    if (labelGap < size || labelGap > size * 14) continue;
+    const core = [closest];
+    let left = closest.rect.left;
+    for (const line of aligned.slice(1)) {
+      if (left - right(line.rect) > size * 3.5) break;
+      core.push(line);
+      left = Math.min(left, line.rect.left);
+    }
+    if (!core.some(line => MATH_RELATION.test(line.text))) continue;
+    const bounds = unionRects(core.map(line => line.rect));
+    const pieces = available.filter(line =>
+      line.rect.left >= bounds.left - size * 0.5 && right(line.rect) <= right(bounds) + size * 0.5 &&
+      Math.abs(midY(line.rect) - midY(label.rect)) <= size * 1.7);
+    const block = [...new Set([...core, ...pieces])];
+    block.forEach(line => claimed.add(line));
+    equations.push({ ...mergeMathLines(block, size), displayMath: true });
+  }
+  return { equations, lines: input.filter(line => !claimed.has(line)) };
+}
+
 /**
  * Attach sub/superscripts, fraction numerators/denominators and radicands to
  * the line they belong to. Such a "satellite" sits on a different baseline
@@ -164,7 +208,7 @@ function readingOrder(a: PdfTextFragment, b: PdfTextFragment): number {
  * nearby equation line before either part is attached.
  */
 export function attachPdfScripts(input: PdfVisualLine[]): PdfVisualLine[] {
-  const lines = input.slice();
+  const { equations, lines } = splitNumberedEquations(input);
   const host = lines.map((_, index) => index);
   const find = (index: number): number => host[index] === index ? index : (host[index] = find(host[index]));
   const weight = (line: PdfVisualLine) => line.fontSize * 1000 + line.text.length;
@@ -183,7 +227,7 @@ export function attachPdfScripts(input: PdfVisualLine[]): PdfVisualLine[] {
   }
   const fractionBounds = new Map<number, PdfParagraphRect>();
   lines.forEach((anchor, anchorIndex) => {
-    if (!/[=≈≠≤≥]/.test(anchor.text)) return;
+    if (!MATH_RELATION.test(anchor.text)) return;
     const size = anchor.fontSize;
     const above: number[] = [];
     const below: number[] = [];
@@ -240,12 +284,11 @@ export function attachPdfScripts(input: PdfVisualLine[]): PdfVisualLine[] {
     const cluster = clusters.get(root);
     if (cluster) cluster.push(line); else clusters.set(root, [line]);
   });
-  const merged: PdfVisualLine[] = [];
+  const merged = [...equations];
   for (const cluster of clusters.values()) {
     if (cluster.length === 1) { merged.push(cluster[0]); continue; }
     const base = cluster.reduce((best, line) => weight(line) > weight(best) ? line : best);
-    const fragments = cluster.flatMap(line => line.fragments).sort(readingOrder);
-    merged.push({ text: joinFragments(fragments), rect: unionRects(cluster.map(line => line.rect)), fontSize: base.fontSize, fragments, math: true });
+    merged.push(mergeMathLines(cluster, base.fontSize));
   }
   return merged.sort((a, b) => a.rect.top - b.rect.top || a.rect.left - b.rect.left);
 }
@@ -256,6 +299,7 @@ function hasColumnOverlap(a: PdfVisualLine, b: PdfVisualLine): boolean {
 }
 
 function canContinueParagraph(previous: PdfVisualLine, current: PdfVisualLine): boolean {
+  if (previous.displayMath || current.displayMath) return false;
   const fontRatio = Math.min(previous.fontSize, current.fontSize) / Math.max(previous.fontSize, current.fontSize);
   if (fontRatio < 0.75) return false;
   const gap = current.rect.top - bottom(previous.rect);
