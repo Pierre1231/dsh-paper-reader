@@ -1202,7 +1202,7 @@ function PdfReaderInstance({ instance, contentKey, data, fileName, sessionId, wo
     let lastEvent: PointerSample | undefined;
     let scrollIdleTimer: ReturnType<typeof setTimeout> | undefined;
     let scrolling = false;
-    let pending: { key: string; mode: 'hover' | 'figure'; activate: (ticket: number) => void; position?: { x: number; y: number } } | undefined;
+    let pending: { key: string; mode: 'hover' | 'figure'; activate: (ticket: number) => void } | undefined;
     const clearHoverTimer = () => { hoverTicket++; if (hoverTimer !== undefined) clearTimeout(hoverTimer); hoverTimer = undefined; pending = undefined; };
     const clearCloseTimer = () => { if (closeTimer !== undefined) clearTimeout(closeTimer); closeTimer = undefined; };
     const focused = () => !!menuElementRef.current?.contains(document.activeElement);
@@ -1213,30 +1213,19 @@ function PdfReaderInstance({ instance, contentKey, data, fileName, sessionId, wo
         if (!focused()) setMenu(current => current?.mode === 'selection' ? current : null);
       }, 250);
     };
-    const HOVER_DELAY = 120; // Reduced from 180ms for better responsiveness
-    const POSITION_THRESHOLD = 5; // Pixels - position changes beyond this reset the timer
+    const HOVER_DELAY = 120;
 
-    const schedule = (key: string, mode: 'hover' | 'figure', activate: (ticket: number) => void, position?: { x: number; y: number }) => {
+    const schedule = (key: string, mode: 'hover' | 'figure', activate: (ticket: number) => void) => {
       const current = menuRef.current;
       if (current?.mode === mode && current.key === key) { clearHoverTimer(); clearCloseTimer(); return; }
 
-      // If same key and mode, check if position changed significantly
       if (pending?.key === key && pending.mode === mode) {
-        const lastPos = pending.position;
-        // If position hasn't changed significantly (< threshold), just update activate
-        if (lastPos && position &&
-            Math.abs(lastPos.x - position.x) < POSITION_THRESHOLD &&
-            Math.abs(lastPos.y - position.y) < POSITION_THRESHOLD) {
-          pending.activate = activate;
-          return;
-        }
-        // Position changed significantly, reset timer
-        clearHoverTimer();
-      } else {
-        clearHoverTimer(); clearCloseTimer();
+        pending.activate = activate;
+        return;
       }
 
-      pending = { key, mode, activate, position };
+      clearHoverTimer(); clearCloseTimer();
+      pending = { key, mode, activate };
       const ticket = hoverTicket;
       hoverTimer = setTimeout(() => {
         const target = pending; pending = undefined; hoverTimer = undefined;
@@ -1285,7 +1274,7 @@ function PdfReaderInstance({ instance, contentKey, data, fileName, sessionId, wo
             if (event.clientX < rect.left - 4 || event.clientX > rect.left + rect.width + 4 ||
                 event.clientY < rect.top - 4 || event.clientY > rect.top + rect.height + 4 || ticket !== hoverTicket) return;
             showFigure(pageElement, preciseFigure);
-          }, { x: event.clientX, y: event.clientY });
+          });
           return;
         }
       }
@@ -1304,7 +1293,7 @@ function PdfReaderInstance({ instance, contentKey, data, fileName, sessionId, wo
           anchor: { left, top, width: right - left, height: bottom - top },
           highlights: paragraph.rects.map(rect => ({ left: rect.left, top: rect.top, width: rect.width, height: rect.height })),
         });
-      }, { x: event.clientX, y: event.clientY });
+      });
     };
     const onPointerMove = (event: PointerEvent) => {
       lastEvent = event;
