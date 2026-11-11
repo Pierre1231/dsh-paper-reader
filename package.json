@@ -1,6 +1,7 @@
 {
   "name": "dsh-paper-reader",
-  "version": "0.7.2",
+  "private": true,
+  "version": "0.8.0",
   "description": "Read PDFs beside a DSH conversation, quote selected passages, and generate discussion-based reading notes",
   "author": "Jingyi HUANG <2270737347@qq.com>",
   "contributors": [
@@ -60,6 +61,7 @@
   ],
   "scripts": {
     "build": "node build.mjs",
+    "pack:npm": "node pack-npm.mjs",
     "typecheck": "tsc --noEmit",
     "test": "node --test tests/*.test.mjs",
     "test:browser": "node tests/browser-e2e.mjs",

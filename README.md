@@ -11,6 +11,12 @@
 
 仓库已包含构建产物，直接安装即可使用。
 
+### 通过 npm 安装与更新
+
+npm 版发布后，在 DSH「插件 → 添加插件」里输入 `dsh-paper-reader-pierre` 并启用。npm 上的 `dsh-paper-reader` 是另一个项目，请勿混淆。
+
+已有 GitHub 安装的用户如需使用 DSH 的更新提示，需要先卸载原插件，再从 npm 安装一次，避免两个版本同时启用。之后在 DSH 插件页刷新，发现兼容的新版本时会显示「可更新」，由用户确认安装。
+
 ## 使用
 
 打开工作区 PDF，在右侧预览器中选择「论文阅读」；也可通过会话顶部的「打开本地论文」选择本机 PDF。
@@ -38,6 +44,8 @@ npm run build
 ```
 
 在 DSH 插件管理器中添加本地项目目录并启用即可。版本变更见 [更新日志](CHANGELOG.md)。
+
+发布 npm 版时，先构建，再运行 `npm run pack:npm`。检查 `dist/dsh-paper-reader-pierre-<版本>.tgz` 后，用有发布权限的 npm 账号运行 `npm publish dist/dsh-paper-reader-pierre-<版本>.tgz --access public`。打包不会改动 GitHub 版或本地链接使用的包名。
 
 动效与视觉交互回归：先运行 `npm run build`，再运行 `npm run test:motion`。测试会生成临时双页 PDF，在隔离的本地服务中检查菜单开合、悬停、操作反馈、加载、缩放、交叉主题、窄屏、搜索及引用跳转，不调用真实模型。macOS 默认使用已安装的 Microsoft Edge；其他浏览器通过 `CHROME_PATH` 指定 Chromium 可执行文件。主题截图保存在 `test-results/motion/`。
 
