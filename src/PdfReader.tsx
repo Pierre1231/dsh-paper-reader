@@ -1213,7 +1213,7 @@ function PdfReaderInstance({ instance, contentKey, data, fileName, sessionId, wo
         if (!focused()) setMenu(current => current?.mode === 'selection' ? current : null);
       }, 250);
     };
-    const HOVER_DELAY = 120;
+    const HOVER_DELAY = 90;
 
     const schedule = (key: string, mode: 'hover' | 'figure', activate: (ticket: number) => void) => {
       const current = menuRef.current;
