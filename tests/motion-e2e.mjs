@@ -14,7 +14,16 @@ const objects = [
   '<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Resources << /Font << /F1 5 0 R >> >> /Contents 7 0 R >>',
   '<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>',
   ...[1, 2].map(number => {
-    const stream = `BT /F1 16 Tf 70 700 Td (Reading motion page ${number}) Tj 0 -40 Td (A paragraph for selection and search.) Tj 0 -40 Td (Another paragraph for hover feedback.) Tj 0 -60 Td (Jump to next chapter.) Tj ET`
+    const body = `BT /F1 16 Tf 70 700 Td (Reading motion page ${number}) Tj 0 -40 Td (A paragraph for selection and search.) Tj 0 -40 Td (Another paragraph for hover feedback.) Tj 0 -60 Td (Jump to next chapter.) Tj ET`
+    const fraction = [
+      'BT /F1 12 Tf 160 430 Td (f = ) Tj ET',
+      'BT /F1 10 Tf 197 444 Td (a + b) Tj ET',
+      '192 435 m 225 435 l S',
+      'BT /F1 10 Tf 197 415 Td (c - d) Tj ET',
+      'BT /F1 12 Tf 235 430 Td (+ 1) Tj ET',
+      'BT /F1 12 Tf 500 430 Td (\\(7\\)) Tj ET'
+    ].join('\n')
+    const stream = number === 2 ? `${body}\n${fraction}` : body
     return `<< /Length ${stream.length} >>\nstream\n${stream}\nendstream`
   }),
   '<< /Type /Annot /Subtype /Link /Rect [70 548 370 572] /Dest [4 0 R /XYZ null 700 null] >>',
@@ -244,8 +253,33 @@ try {
   assert.equal(await page.locator('.pr-location-cue').evaluate(node => getComputedStyle(node).animationName), 'none')
   await page.getByRole('button', { name: '搜索', exact: true }).click()
   assert.equal(await page.locator('.pr-searchbar').evaluate(node => getComputedStyle(node).transitionDuration), '0s')
+  await page.getByRole('searchbox').press('Escape')
+  const formulaSpan = pattern => page.locator('[data-pdf-page="2"] .pr-text-layer span').filter({ hasText: pattern }).first()
+  const formulaParts = [/^f\s*=$/, /^a\s*\+\s*b$/, /^c\s*-\s*d$/, /^\+\s*1$/].map(formulaSpan)
+  const formulaBoxes = []
+  for (const part of formulaParts) {
+    await part.waitFor()
+    formulaBoxes.push(await part.boundingBox())
+  }
+  await formulaParts[0].hover()
+  await highlight.waitFor()
+  const formulaBox = await highlight.boundingBox()
+  for (const part of formulaBoxes) {
+    assert.ok(formulaBox.x <= part.x && formulaBox.y <= part.y &&
+      formulaBox.x + formulaBox.width >= part.x + part.width &&
+      formulaBox.y + formulaBox.height >= part.y + part.height, 'the hover outline covers the whole fraction and its main line')
+  }
+  const equationNumber = await formulaSpan(/^\(7\)$/).boundingBox()
+  assert.ok(formulaBox.x + formulaBox.width < equationNumber.x, 'the equation number is outside the outline')
+  for (const part of formulaParts.slice(1, 3)) {
+    await page.keyboard.press('Escape')
+    await highlight.waitFor({ state: 'detached' })
+    await part.hover()
+    await highlight.waitFor()
+    assert.deepEqual(await highlight.boundingBox(), formulaBox, 'hovering either half of the fraction selects the same equation')
+  }
   assert.deepEqual(errors, [])
-  console.log('PASS: menus, feedback, loading, zoom, themes, responsive toolbar, anchored search, outline/link navigation')
+  console.log('PASS: menus, feedback, loading, zoom, themes, responsive toolbar, anchored search, navigation, whole-formula hover')
 } finally {
   await browser?.close()
   server.kill()

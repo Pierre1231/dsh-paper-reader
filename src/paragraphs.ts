@@ -48,6 +48,10 @@ function horizontalOverlap(a: PdfParagraphRect, b: PdfParagraphRect): number {
   return Math.max(0, Math.min(right(a), right(b)) - Math.max(a.left, b.left));
 }
 
+function horizontalGap(a: PdfParagraphRect, b: PdfParagraphRect): number {
+  return Math.max(b.left - right(a), a.left - right(b));
+}
+
 function verticalOverlap(a: PdfParagraphRect, b: PdfParagraphRect): number {
   return Math.max(0, Math.min(bottom(a), bottom(b)) - Math.max(a.top, b.top));
 }
@@ -132,6 +136,13 @@ export function buildPdfVisualLines(fragments: PdfTextFragment[]): PdfVisualLine
 }
 
 const baselineOf = (line: PdfVisualLine) => bottom(line.rect);
+const midY = (rect: PdfParagraphRect) => rect.top + rect.height / 2;
+
+function isFractionPart(text: string): boolean {
+  const compact = text.replace(/\s+/g, '');
+  return /^[\p{L}\d]{1,3}$/u.test(compact) ||
+    (/[+\-−×÷*/^√]/.test(compact) && !/\p{L}{4,}/u.test(compact));
+}
 
 function readingOrder(a: PdfTextFragment, b: PdfTextFragment): number {
   // The text layer follows the PDF content stream, which is the order the
@@ -148,9 +159,9 @@ function readingOrder(a: PdfTextFragment, b: PdfTextFragment): number {
  * the line they belong to. Such a "satellite" sits on a different baseline
  * (and usually a smaller size), so line building and the paragraph rules
  * (font ratio, one successor) split a display equation into fragments and a
- * hover only covered part of it. A satellite overlaps its host vertically and
- * lies within or right next to it horizontally; prose lines never overlap
- * vertically, and table cells share a baseline, so neither is affected.
+ * hover only covered part of it. A satellite usually overlaps its host.
+ * A separated fraction instead requires aligned math above and below a
+ * nearby equation line before either part is attached.
  */
 export function attachPdfScripts(input: PdfVisualLine[]): PdfVisualLine[] {
   const lines = input.slice();
@@ -170,6 +181,37 @@ export function attachPdfScripts(input: PdfVisualLine[]): PdfVisualLine[] {
       if (ra !== rb) host[ra] = rb;
     }
   }
+  const fractionBounds = new Map<number, PdfParagraphRect>();
+  lines.forEach((anchor, anchorIndex) => {
+    if (!/[=≈≠≤≥]/.test(anchor.text)) return;
+    const size = anchor.fontSize;
+    const above: number[] = [];
+    const below: number[] = [];
+    lines.forEach((part, index) => {
+      const offset = midY(part.rect) - midY(anchor.rect);
+      if (Math.abs(offset) < size * 0.6 || Math.abs(offset) > size * 1.8 ||
+          horizontalGap(anchor.rect, part.rect) > size * 2 ||
+          part.rect.width > size * 6 || !isFractionPart(part.text)) return;
+      (offset < 0 ? above : below).push(index);
+    });
+    const used = new Set<number>();
+    for (const upper of above) {
+      const numerator = lines[upper].rect;
+      const lower = below.find(index => {
+        if (used.has(index)) return false;
+        const denominator = lines[index].rect;
+        return bottom(numerator) < denominator.top &&
+          (bottom(numerator) <= anchor.rect.top || denominator.top >= bottom(anchor.rect)) &&
+          horizontalOverlap(numerator, denominator) >= Math.min(numerator.width, denominator.width) * 0.5;
+      });
+      if (lower === undefined) continue;
+      used.add(lower);
+      const root = find(anchorIndex);
+      host[find(upper)] = root;
+      host[find(lower)] = root;
+      fractionBounds.set(anchorIndex, unionRects([fractionBounds.get(anchorIndex) ?? anchor.rect, numerator, lines[lower].rect]));
+    }
+  });
   // A formula's own pieces on its main baseline can be split apart by a gap
   // (an unstretched one-glyph span such as "√" renders narrower than in the
   // PDF). Rejoin same-baseline neighbours of a formula within two glyph widths;
@@ -185,7 +227,7 @@ export function attachPdfScripts(input: PdfVisualLine[]): PdfVisualLine[] {
         const size = Math.max(formula.fontSize, piece.fontSize);
         if (Math.abs(baselineOf(formula) - baselineOf(piece)) >= size * 0.2) continue;
         if (verticalOverlap(formula.rect, piece.rect) < Math.min(formula.rect.height, piece.rect.height) * 0.5) continue;
-        const gap = Math.max(piece.rect.left - right(formula.rect), formula.rect.left - right(piece.rect));
+        const gap = horizontalGap(fractionBounds.get(a) ?? formula.rect, piece.rect);
         if (gap > size * 2) continue;
         host[find(b)] = find(a);
         changed = true;

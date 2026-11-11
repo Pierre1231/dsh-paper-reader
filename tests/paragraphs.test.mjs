@@ -215,6 +215,32 @@ test('a display equation with a fraction and scripts becomes one hover paragraph
   assert.ok(line.rect.top <= 464.8 && line.rect.top + line.rect.height >= 490.3, 'covers numerator, superscript and subscript');
 });
 
+test('a separated fraction stack joins the baseline and following term without absorbing nearby text', () => {
+  const lines = attachPdfScripts(buildPdfVisualLines([
+    fragment('f =', 160, 100, 18),
+    fragment('a + b', 197, 86, 22, 10, 10),
+    fragment('c - d', 197, 116, 22, 10, 10),
+    fragment('+ 1', 235, 100, 18),
+    fragment('(7)', 500, 100, 16),
+    fragment('Ordinary text below the display', 145, 138, 230),
+  ]));
+  const formula = lines.find(line => line.text.startsWith('f ='));
+  assert.equal(formula.math, true);
+  assert.deepEqual(formula.rect, rect(160, 86, 93, 40));
+  assert.deepEqual(formula.fragments.map(piece => piece.text), ['f =', 'a + b', 'c - d', '+ 1']);
+  assert.ok(lines.some(line => line.text === '(7)'));
+  assert.ok(lines.some(line => line.text === 'Ordinary text below the display'));
+});
+
+test('separated rows without aligned math on both sides stay independent', () => {
+  const lines = attachPdfScripts(buildPdfVisualLines([
+    fragment('f =', 160, 100, 18),
+    fragment('a + b', 197, 86, 22, 10, 10),
+    fragment('c - d', 220, 116, 22, 10, 10),
+  ]));
+  assert.equal(lines.length, 3);
+});
+
 test('inline sub/superscripts stay in their prose line and do not break the paragraph', () => {
   const lines = attachPdfScripts(buildPdfVisualLines([
     fragment('values of d', 50, 0, 60, 10, 10),
