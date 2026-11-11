@@ -37,42 +37,46 @@ try {
 
   for (const zoom of ['171%', '100%']) {
     if (zoom === '100%') await useActualSize(page)
-    const layout = await sheet.evaluate(element => {
-      const spans = [...element.querySelectorAll('.pr-text-layer span')]
-      const label = spans.findIndex(node => node.textContent.trim() === '(2)')
-      const left = spans.findLastIndex((node, index) => index < label && node.textContent.trim() === 'J')
-      const start = spans[left - 1]?.textContent === 'ˆ' ? left - 1 : left
-      if (left < 0 || label < 0) throw new Error('Equation (2) not found')
-      const scroll = element.closest('.pr-scroll')
-      scroll.scrollTop += spans[left].getBoundingClientRect().top - scroll.getBoundingClientRect().top - 260
-      const rect = node => {
-        const { left, top, right, bottom } = node.getBoundingClientRect()
-        return { left, top, right, bottom }
+    for (const [number, leftSymbol] of [[2, 'J'], [3, 'L']]) {
+      const layout = await sheet.evaluate((element, { number, leftSymbol }) => {
+        const spans = [...element.querySelectorAll('.pr-text-layer span')]
+        const label = spans.findIndex(node => node.textContent.trim() === `(${number})`)
+        const left = spans.findLastIndex((node, index) => index < label && node.textContent.trim() === leftSymbol)
+        const start = spans[left - 1]?.textContent === 'ˆ' ? left - 1 : left
+        if (left < 0 || label < 0) throw new Error(`Equation (${number}) not found`)
+        const scroll = element.closest('.pr-scroll')
+        scroll.scrollTop += spans[left].getBoundingClientRect().top - scroll.getBoundingClientRect().top - 260
+        const rect = node => {
+          const { left, top, right, bottom } = node.getBoundingClientRect()
+          return { left, top, right, bottom }
+        }
+        const formula = spans.slice(start, label).filter(node => node.textContent.trim())
+        const hits = [spans[left], formula.find(node => node.textContent === 'γ')]
+        if (number === 3) hits.push(formula.filter(node => node.textContent === 'V')[1])
+        return {
+          formula: formula.map(rect),
+          label: rect(spans[label]),
+          hover: hits.map(rect),
+          previousText: rect(spans.slice(0, start).findLast(node => node.textContent.trim()))
+        }
+      }, { number, leftSymbol })
+      for (const hit of layout.hover) {
+        await page.mouse.move(8, 8)
+        await page.keyboard.press('Escape')
+        await highlight.waitFor({ state: 'detached' })
+        await page.mouse.move((hit.left + hit.right) / 2, (hit.top + hit.bottom) / 2)
+        await highlight.waitFor({ timeout: 4000 })
+        const frame = await highlight.boundingBox()
+        const covered = layout.formula.filter(part => frame.x <= part.left + 1 && frame.y <= part.top + 1 &&
+          frame.x + frame.width >= part.right - 1 && frame.y + frame.height >= part.bottom - 1).length
+        assert.equal(covered, layout.formula.length, `${zoom}: equation (${number}) outline covers all glyphs (${covered}/${layout.formula.length})`)
+        assert.ok(frame.x + frame.width < layout.label.left, 'equation number stays outside the outline')
+        assert.ok(frame.y >= layout.previousText.bottom - 2, 'preceding prose stays outside the outline')
       }
-      const formula = spans.slice(start, label).filter(node => node.textContent.trim())
-      return {
-        formula: formula.map(rect),
-        label: rect(spans[label]),
-        hover: [spans[left], formula.find(node => node.textContent === 'γ')].map(rect),
-        previousText: rect(spans.slice(0, start).findLast(node => node.textContent.trim()))
-      }
-    })
-    for (const hit of layout.hover) {
-      await page.mouse.move(8, 8)
-      await page.keyboard.press('Escape')
-      await highlight.waitFor({ state: 'detached' })
-      await page.mouse.move((hit.left + hit.right) / 2, (hit.top + hit.bottom) / 2)
-      await highlight.waitFor({ timeout: 4000 })
-      const frame = await highlight.boundingBox()
-      const covered = layout.formula.filter(part => frame.x <= part.left + 1 && frame.y <= part.top + 1 &&
-        frame.x + frame.width >= part.right - 1 && frame.y + frame.height >= part.bottom - 1).length
-      assert.equal(covered, layout.formula.length, `${zoom}: equation (2) outline covers all glyphs (${covered}/${layout.formula.length})`)
-      assert.ok(frame.x + frame.width < layout.label.left, 'equation number stays outside the outline')
-      assert.ok(frame.y >= layout.previousText.bottom - 2, 'preceding prose stays outside the outline')
     }
   }
   assert.deepEqual(errors, [])
-  console.log('PASS: SuperMimic page 5 equation (2), hover from either side at 171% and 100%')
+  console.log('PASS: SuperMimic page 5 equations (2) and (3), whole-equation hover at 171% and 100%')
 } finally {
   await browser?.close()
   server.kill()

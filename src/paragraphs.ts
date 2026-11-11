@@ -36,6 +36,10 @@ export interface PdfVisualLine {
 
 const right = (rect: PdfParagraphRect) => rect.left + rect.width;
 const bottom = (rect: PdfParagraphRect) => rect.top + rect.height;
+const EQUATION_LABEL = /^\(\s*\d+(?:\.\d+)*[a-z]?\s*\)$/i;
+const PROSE_WORDS = /\b[A-Za-z]{3,}\s+[A-Za-z]{3,}\b/;
+const MATH_RELATION = /[=≈≠≤≥]/;
+const TRAILING_OPERATOR = /[=≈≠≤≥+\-−×÷*/]$/;
 
 function unionRects(rects: PdfParagraphRect[]): PdfParagraphRect {
   const left = Math.min(...rects.map(rect => rect.left));
@@ -127,6 +131,10 @@ export function buildPdfVisualLines(fragments: PdfTextFragment[]): PdfVisualLine
         const gap = fragment.rect.left - currentRight;
         const maxGap = Math.max(2, Math.max(previous.fontSize, fragment.fontSize) * 1.5);
         if (gap > maxGap) flush();
+        else if (gap >= fragment.fontSize && EQUATION_LABEL.test(fragment.text.trim())) {
+          const prefix = joinFragments(current);
+          if (MATH_RELATION.test(prefix) && !TRAILING_OPERATOR.test(prefix) && !PROSE_WORDS.test(prefix)) flush();
+        }
       }
       current.push(fragment);
       currentRight = Math.max(currentRight, right(fragment.rect));
@@ -159,10 +167,6 @@ function mergeMathLines(lines: PdfVisualLine[], fontSize: number): PdfVisualLine
   const fragments = lines.flatMap(line => line.fragments).sort(readingOrder);
   return { text: joinFragments(fragments), rect: unionRects(lines.map(line => line.rect)), fontSize, fragments, math: true };
 }
-
-const EQUATION_LABEL = /^\(\s*\d+(?:\.\d+)*[a-z]?\s*\)$/i;
-const PROSE_WORDS = /\b[A-Za-z]{3,}\s+[A-Za-z]{3,}\b/;
-const MATH_RELATION = /[=≈≠≤≥]/;
 
 function splitNumberedEquations(input: PdfVisualLine[]) {
   const claimed = new Set<PdfVisualLine>();

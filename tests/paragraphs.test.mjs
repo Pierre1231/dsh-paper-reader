@@ -273,6 +273,23 @@ test('a detached reference number does not turn prose with an inline relation in
   assert.ok(lines.every(line => !line.displayMath));
 });
 
+test('a nearby equation label is split without splitting inline parenthesized numbers', () => {
+  const rows = buildPdfVisualLines([
+    fragment('R = r + γV,', 100, 20, 92, 17, 17),
+    fragment('(3)', 217, 20, 20, 17, 17),
+    fragment('f = g', 100, 60, 42, 17, 17),
+    fragment('(4)', 144, 60, 20, 17, 17),
+    fragment('The estimated value = 2', 100, 100, 160, 17, 17),
+    fragment('(5)', 285, 100, 20, 17, 17),
+    fragment('h =', 100, 140, 32, 17, 17),
+    fragment('(6)', 157, 140, 20, 17, 17),
+  ]);
+  assert.deepEqual(rows.map(row => row.text), ['R = r + γV,', '(3)', 'f = g(4)', 'The estimated value = 2(5)', 'h =(6)']);
+  const equation = attachPdfScripts(rows).find(line => line.displayMath);
+  assert.equal(equation?.text, 'R = r + γV,');
+  assert.equal(equation?.rect.width, 92);
+});
+
 test('inline sub/superscripts stay in their prose line and do not break the paragraph', () => {
   const lines = attachPdfScripts(buildPdfVisualLines([
     fragment('values of d', 50, 0, 60, 10, 10),
